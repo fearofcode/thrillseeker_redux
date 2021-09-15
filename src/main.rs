@@ -51,7 +51,6 @@ const P_ADD_PROGRAM: f32 = 0.5;
 
 const FITNESS_THRESHOLD: f32 = 45.0 * (FITNESS_CASE_COUNT as f32) + 1.0;
 
-const FUNCTION_COUNT: usize = 18;
 const MAX_ARITY: usize = 3;
 
 const NEGATIVE_TORQUE: f32 = -1.0;
@@ -107,6 +106,18 @@ enum Function {
     Copy,
 }
 
+const LEGAL_FUNCTION_COUNT: usize = 7;
+
+const LEGAL_FUNCTIONS: [Function; LEGAL_FUNCTION_COUNT] = [
+    Function::Plus,
+    Function::Minus,
+    Function::Times,
+    Function::Divide,
+    Function::Log,
+    Function::And,
+    Function::Or,
+];
+
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -152,30 +163,6 @@ fn function_arity(f: &Function) -> usize {
         Function::Less => 2,
         Function::IfThenElse => 3,
         Function::Copy => 1,
-    }
-}
-
-fn index_to_function(index: usize) -> Function {
-    match index {
-        0 => Function::Relu,
-        1 => Function::Plus,
-        2 => Function::Minus,
-        3 => Function::Times,
-        4 => Function::Divide,
-        5 => Function::Square,
-        6 => Function::Sin,
-        7 => Function::Log,
-        8 => Function::And,
-        9 => Function::Or,
-        10 => Function::Not,
-        11 => Function::Xor,
-        12 => Function::Min,
-        13 => Function::Max,
-        14 => Function::Greater,
-        15 => Function::Less,
-        16 => Function::IfThenElse,
-        17 => Function::Copy,
-        _ => panic!(),
     }
 }
 
@@ -305,8 +292,8 @@ fn random_instruction(rng: &mut Rng) -> Instruction {
 
     instruction.destination = rng.usize(..REGISTER_COUNT);
 
-    let function_index = rng.usize(..FUNCTION_COUNT);
-    let random_function = index_to_function(function_index);
+    let function_index = rng.usize(..LEGAL_FUNCTION_COUNT);
+    let random_function = LEGAL_FUNCTIONS[function_index];
     instruction.op = random_function;
     let arity = function_arity(&random_function);
 
@@ -1128,14 +1115,14 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
         let current_op = program.active_instructions[instruction_index].op;
         let current_arity = function_arity(&current_op);
 
-        let equal_arity_functions_len = (0..FUNCTION_COUNT)
-            .map(index_to_function)
-            .filter(|f| function_arity(&f) == current_arity)
-            .count();
+        let equal_arity_functions: Vec<_> = LEGAL_FUNCTIONS.iter()
+            .filter(|f| function_arity(&f) == current_arity).collect();
 
-        let new_function_index = rng.usize(..equal_arity_functions_len);
-        let new_op = index_to_function(new_function_index);
-        program.active_instructions[instruction_index].op = new_op;
+        let equal_arity_function_count = equal_arity_functions.len();
+
+        let new_function_index = rng.usize(..equal_arity_function_count);
+        let new_op = equal_arity_functions[new_function_index];
+        program.active_instructions[instruction_index].op = *new_op;
     } else if coin_flip(P_FLIP_INPUT, rng) {
         let instruction_index = rng.usize(..program.active_instructions.len());
         let instruction_op = program.active_instructions[instruction_index].op;
