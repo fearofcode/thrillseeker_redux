@@ -23,7 +23,7 @@ const INPUT_COUNT: usize = 4;
 const FITNESS_CASE_COUNT: usize = 100;
 const REGISTER_COUNT: usize = 4;
 const POPULATION_SIZE: usize = 2000;
-const POPULATION_TO_DELETE: usize = 1800;
+const POPULATION_TO_DELETE: usize = 1500;
 const DELETION_POINT: usize = POPULATION_SIZE - POPULATION_TO_DELETE;
 const MAX_PROGRAM_SIZE: usize = 32;
 const MIN_INITIAL_PROGRAM_SIZE: usize = 1;
@@ -32,22 +32,22 @@ const ACTION_COUNT: usize = 3;
 const MAX_INITIAL_TEAM_SIZE: usize = ACTION_COUNT * 3;
 const MAX_TEAM_SIZE: usize = ACTION_COUNT * 6;
 
-const TOURNAMENT_SIZE: usize = 2;
+const TOURNAMENT_SIZE: usize = 4;
 const GENERATION_COUNT: usize = 1000;
-const GENERATION_STAGNATION_LIMIT: usize = 15;
+const GENERATION_STAGNATION_LIMIT: usize = 25;
 const RUN_COUNT: usize = 1;
 
 const P_DELETE_INSTRUCTION: f32 = 0.8;
 const P_ADD_INSTRUCTION: f32 = 0.8;
 const P_SWAP_INSTRUCTIONS: f32 = 0.8;
-const P_CHANGE_DESTINATION: f32 = 0.05;
-const P_CHANGE_FUNCTION: f32 = 0.05;
-const P_CHANGE_INPUT: f32 = 0.05;
-const P_FLIP_INPUT: f32 = 0.05;
-const P_CHANGE_ACTION: f32 = 0.05;
+const P_CHANGE_DESTINATION: f32 = 0.1;
+const P_CHANGE_FUNCTION: f32 = 0.1;
+const P_CHANGE_INPUT: f32 = 0.1;
+const P_FLIP_INPUT: f32 = 0.1;
+const P_CHANGE_ACTION: f32 = 0.1;
 
-const P_DELETE_PROGRAM: f32 = 0.7;
-const P_ADD_PROGRAM: f32 = 0.7;
+const P_DELETE_PROGRAM: f32 = 0.5;
+const P_ADD_PROGRAM: f32 = 0.5;
 
 const FITNESS_THRESHOLD: f32 = 45.0 * (FITNESS_CASE_COUNT as f32) + 1.0;
 
@@ -1099,7 +1099,7 @@ fn size_fair_dependent_instruction_crossover(
 }
 
 
-fn mutate_program(program: &mut Program, rng: &mut Rng, counter: &mut u64) {
+fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, counter: &mut u64) {
     if program.active_instructions.is_empty() {
         return;
     }
@@ -1168,11 +1168,16 @@ fn mutate_program(program: &mut Program, rng: &mut Rng, counter: &mut u64) {
 
         program.active_instructions[instruction_index].operands[input_index] = rng.usize(..limit);
     } else if coin_flip(P_CHANGE_ACTION, rng) {
-        // TODO previously we checked that we'd only delete actions with > 1 learner
-
         let action_index = rng.usize(..ACTION_COUNT);
 
-        program.action = action_index;
+        let learners_with_action = team_actions.iter().enumerate().filter(|(program_index, action)| *program_index != action_index && **action == action_index).count();
+
+        // only change action if there is another learner with this action so actions are not lost
+        // if it is not beneficial to ever perform a certain action, learners will have to evolve
+        // a no-op program
+        if learners_with_action >= 1 {
+            program.action = action_index;
+        }
     }
 
     // effective instructions may have changed
@@ -1389,8 +1394,10 @@ fn tournament_selection(teams: &[Team], rng: &mut Rng) -> usize {
 }
 
 fn mutate_team(team: &mut Team, other_team: &mut Team, rng: &mut Rng, counter: &mut u64) {
+    let team_actions: Vec<_> = team.programs.iter().map(|p| p.action).collect();
+
     for program in team.programs.iter_mut() {
-        mutate_program(program, rng, counter);
+        mutate_program(program, &team_actions, rng, counter);
     }
 
     if team.programs.len() < MAX_TEAM_SIZE && coin_flip(P_ADD_PROGRAM, rng) {
@@ -1400,9 +1407,18 @@ fn mutate_team(team: &mut Team, other_team: &mut Team, rng: &mut Rng, counter: &
     }
 
     if team.programs.len() > 1 && coin_flip(P_DELETE_PROGRAM, rng) {
-        // TODO we used to check that every team would keep at least 1 learner of each action
-        let program_index = rng.usize(..team.programs.len());
-        team.programs.remove(program_index);
+        let deleted_index = rng.usize(..team.programs.len());
+        let deleted_action = team.programs[deleted_index].action;
+
+        let learners_with_action = team_actions.iter().enumerate().filter(|(program_index, action)| *program_index != deleted_index && **action == deleted_action).count();
+
+        // only delete program if there is another learner with this action so actions are not lost
+        // if it is not beneficial to ever perform a certain action, learners will have to evolve
+        // a no-op program
+        if learners_with_action >= 1 {
+            team.programs.remove(deleted_index);
+        }
+
     }
 }
 
