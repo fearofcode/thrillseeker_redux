@@ -22,8 +22,8 @@ const EVALUATE_PARALLEL: bool = true;
 const INPUT_COUNT: usize = 4;
 const FITNESS_CASE_COUNT: usize = 100;
 const REGISTER_COUNT: usize = 4;
-const POPULATION_SIZE: usize = 2000;
-const POPULATION_TO_DELETE: usize = 1500;
+const POPULATION_SIZE: usize = 10000;
+const POPULATION_TO_DELETE: usize = 9500;
 const DELETION_POINT: usize = POPULATION_SIZE - POPULATION_TO_DELETE;
 const MAX_PROGRAM_SIZE: usize = 32;
 const MIN_INITIAL_PROGRAM_SIZE: usize = 1;
@@ -56,7 +56,8 @@ const MAX_ARITY: usize = 3;
 const NEGATIVE_TORQUE: f32 = -1.0;
 const POSITIVE_TORQUE: f32 = 1.0;
 
-type FitnessCase = [f32; INPUT_COUNT];
+const FITNESS_CASE_SIZE: usize = INPUT_COUNT + CONSTANT_COUNT;
+type FitnessCase = [f32; FITNESS_CASE_SIZE];
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 enum ProgramAction {
@@ -106,16 +107,34 @@ enum Function {
     Copy,
 }
 
-const LEGAL_FUNCTION_COUNT: usize = 7;
+const LEGAL_FUNCTION_COUNT: usize = 18;
 
 const LEGAL_FUNCTIONS: [Function; LEGAL_FUNCTION_COUNT] = [
+    Function::Relu,
     Function::Plus,
     Function::Minus,
     Function::Times,
     Function::Divide,
+    Function::Square,
+    Function::Sin,
     Function::Log,
     Function::And,
     Function::Or,
+    Function::Not,
+    Function::Xor,
+    Function::Min,
+    Function::Max,
+    Function::Greater,
+    Function::Less,
+    Function::IfThenElse,
+    Function::Copy,
+];
+
+const CONSTANT_COUNT: usize = 1;
+
+// adding more constants seems to hurt things rather than help for acrobot
+const CONSTANT_LIST: [f32; CONSTANT_COUNT] = [
+    0.0
 ];
 
 impl fmt::Display for Function {
@@ -304,7 +323,7 @@ fn random_instruction(rng: &mut Rng) -> Instruction {
         let index_range = if is_register {
             REGISTER_COUNT
         } else {
-            INPUT_COUNT
+            FITNESS_CASE_SIZE
         };
 
         let input_index = rng.usize(..index_range);
@@ -1150,7 +1169,7 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
         let limit = if is_register {
             REGISTER_COUNT
         } else {
-            INPUT_COUNT
+            FITNESS_CASE_SIZE
         };
 
         program.active_instructions[instruction_index].operands[input_index] = rng.usize(..limit);
@@ -1764,6 +1783,21 @@ fn get_seed_value() -> u64 {
         .as_millis() as u64
 }
 
+fn fitness_case_with_constants(inputs: [f32; INPUT_COUNT]) -> FitnessCase {
+    let mut output = [0.0; FITNESS_CASE_SIZE];
+
+    for (i, input) in inputs.iter().enumerate() {
+        output[i] = *input;
+    }
+
+    for (i, constant) in CONSTANT_LIST.iter().enumerate() {
+        let target_index = i + INPUT_COUNT;
+        output[target_index] = *constant;
+    }
+
+    output
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -1789,7 +1823,7 @@ fn main() {
         let x2 = random_float_in_range(&mut rng, -0.1, 0.1);
         let v2 = random_float_in_range(&mut rng, -0.1, 0.1);
 
-        fitness_cases.push([x1, v1, x2, v2]);
+        fitness_cases.push(fitness_case_with_constants([x1, v1, x2, v2]));
     }
 
     for run in 1..=RUN_COUNT {
