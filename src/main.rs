@@ -391,7 +391,11 @@ struct Program {
 impl Program {
     fn restore_introns(&mut self) {
         for intron in self.introns.iter() {
-            self.active_instructions.insert(intron.index, *intron);
+            if intron.index > self.active_instructions.len() {
+                self.active_instructions.push(*intron);
+            } else {
+                self.active_instructions.insert(intron.index, *intron);
+            }
         }
         self.introns.clear();
     }
@@ -407,15 +411,22 @@ impl Program {
         // look for the first instruction with a destination of the output register
 
         let mut last_output_index = 0;
+        let mut found_active_instruction = false;
         for (instruction_index, instruction) in self.active_instructions.iter().enumerate().rev() {
             // r[0] is assumed to be the output register
             if instruction.destination == 0 {
                 last_output_index = instruction_index;
+                found_active_instruction = true;
                 break;
             } else {
                 // end intron
                 self.introns.push(*instruction);
             }
+        }
+
+        if !found_active_instruction {
+            self.active_instructions.clear();
+            return;
         }
 
         // avoid deleting from the vector while iterating through it
@@ -1305,6 +1316,11 @@ fn initialize_teams(rng: &mut Rng, id_counter: &mut u64) -> Vec<Team> {
 
                 program.mark_introns();
 
+                // clear introns so that initially all code is active
+                program.introns.clear();
+                // just to set indexes properly
+                program.mark_introns();
+
                 if !program_set.contains(&program) && !program.active_instructions.is_empty() {
                     *id_counter += 1;
                     program.id = *id_counter;
@@ -1806,6 +1822,7 @@ fn main() {
     } else {
         get_seed_value()
     };
+    let seed = 1631745918204;
 
     println!("Using seed value {}", seed);
 
