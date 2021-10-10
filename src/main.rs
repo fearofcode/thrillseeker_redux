@@ -26,24 +26,24 @@ const EVALUATE_PARALLEL: bool = true;
 const INPUT_COUNT: usize = 4;
 const FITNESS_CASE_COUNT: usize = 100;
 const REGISTER_COUNT: usize = 4;
-const POPULATION_SIZE: usize = 10000;
-const POPULATION_TO_DELETE: usize = 9500;
+const POPULATION_SIZE: usize = 2000;
+const POPULATION_TO_DELETE: usize = 1500;
 const DELETION_POINT: usize = POPULATION_SIZE - POPULATION_TO_DELETE;
 const MAX_PROGRAM_SIZE: usize = 32;
 const MIN_INITIAL_PROGRAM_SIZE: usize = 1;
-const MAX_INITIAL_PROGRAM_SIZE: usize = 12;
+const MAX_INITIAL_PROGRAM_SIZE: usize = 8;
 const ACTION_COUNT: usize = 3;
-const MAX_INITIAL_TEAM_SIZE: usize = ACTION_COUNT * 3;
+const MAX_INITIAL_TEAM_SIZE: usize = ACTION_COUNT * 2;
 const MAX_TEAM_SIZE: usize = ACTION_COUNT * 6;
 
 const TOURNAMENT_SIZE: usize = 4;
 const GENERATION_COUNT: usize = 1000;
-const GENERATION_STAGNATION_LIMIT: usize = 25;
+const GENERATION_STAGNATION_LIMIT: usize = 50;
 const RUN_COUNT: usize = 1;
 
-const P_DELETE_INSTRUCTION: f32 = 0.8;
-const P_ADD_INSTRUCTION: f32 = 0.8;
-const P_SWAP_INSTRUCTIONS: f32 = 0.8;
+const P_DELETE_INSTRUCTION: f32 = 0.7;
+const P_ADD_INSTRUCTION: f32 = 0.7;
+const P_SWAP_INSTRUCTIONS: f32 = 0.7;
 const P_CHANGE_DESTINATION: f32 = 0.1;
 const P_CHANGE_FUNCTION: f32 = 0.1;
 const P_CHANGE_INPUT: f32 = 0.1;
@@ -1719,11 +1719,10 @@ fn one_run(
             let mut file = File::create(output_path).unwrap();
 
             for team in teams.iter() {
-                write!(file, "Fitness {}\n:{}", team.fitness.unwrap(), team).unwrap();
+                write!(file, "Fitness {}:\n{}", team.fitness.unwrap(), team).unwrap();
             }
         }
 
-        // skipping file logging for now
         let mut new_best_found = false;
 
         for team in teams.iter() {
