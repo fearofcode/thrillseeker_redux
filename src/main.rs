@@ -1,13 +1,17 @@
 // seed 1623545378569 finds a 3-instruction solution.
 
+use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fmt;
 use std::fmt::Formatter;
+use std::fs;
+use std::fs::File;
 use std::hash::{Hash, Hasher};
+use std::io::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{env, fmt};
 
 fn coin_flip(p: f32, rng: &mut Rng) -> bool {
     rng.f32() < p
@@ -133,9 +137,7 @@ const LEGAL_FUNCTIONS: [Function; LEGAL_FUNCTION_COUNT] = [
 const CONSTANT_COUNT: usize = 1;
 
 // adding more constants seems to hurt things rather than help for acrobot
-const CONSTANT_LIST: [f32; CONSTANT_COUNT] = [
-    0.0
-];
+const CONSTANT_LIST: [f32; CONSTANT_COUNT] = [0.0];
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -245,14 +247,14 @@ impl fmt::Display for Instruction {
                     "{}[{}] {} {}[{}];",
                     register0_char, self.operands[0], self.op, register1_char, self.operands[1]
                 )
-                    .unwrap();
+                .unwrap();
             } else {
                 writeln!(
                     f,
                     "{}({}[{}], {}[{}]);",
                     self.op, register0_char, self.operands[0], register1_char, self.operands[1]
                 )
-                    .unwrap();
+                .unwrap();
             }
         } else {
             write!(f, "{}(", self.op).unwrap();
@@ -263,7 +265,7 @@ impl fmt::Display for Instruction {
                     if self.is_register[i] { 'r' } else { 'i' },
                     self.operands[i]
                 )
-                    .unwrap();
+                .unwrap();
 
                 if i != (arity - 1) {
                     write!(f, ", ").unwrap();
@@ -366,7 +368,7 @@ fn active_instructions_from_index(
             let arity = function_arity(&previous_instruction.op);
 
             for (operand_index, operand) in
-            previous_instruction.operands.iter().take(arity).enumerate()
+                previous_instruction.operands.iter().take(arity).enumerate()
             {
                 if previous_instruction.is_register[operand_index] {
                     referenced_registers.insert(*operand);
@@ -477,10 +479,10 @@ impl PartialEq for Program {
     fn eq(&self, other: &Self) -> bool {
         self.action == other.action
             && self
-            .active_instructions
-            .iter()
-            .zip(&other.active_instructions)
-            .all(|(i1, i2)| i1 == i2)
+                .active_instructions
+                .iter()
+                .zip(&other.active_instructions)
+                .all(|(i1, i2)| i1 == i2)
     }
 }
 
@@ -1115,7 +1117,6 @@ fn size_fair_dependent_instruction_crossover(
     }
 }
 
-
 fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, counter: &mut u64) {
     if program.active_instructions.is_empty() {
         return;
@@ -1145,8 +1146,10 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
         let current_op = program.active_instructions[instruction_index].op;
         let current_arity = function_arity(&current_op);
 
-        let equal_arity_functions: Vec<_> = LEGAL_FUNCTIONS.iter()
-            .filter(|f| function_arity(&f) == current_arity).collect();
+        let equal_arity_functions: Vec<_> = LEGAL_FUNCTIONS
+            .iter()
+            .filter(|f| function_arity(f) == current_arity)
+            .collect();
 
         let equal_arity_function_count = equal_arity_functions.len();
 
@@ -1187,7 +1190,13 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
     } else if coin_flip(P_CHANGE_ACTION, rng) {
         let action_index = rng.usize(..ACTION_COUNT);
 
-        let learners_with_action = team_actions.iter().enumerate().filter(|(program_index, action)| *program_index != action_index && **action == action_index).count();
+        let learners_with_action = team_actions
+            .iter()
+            .enumerate()
+            .filter(|(program_index, action)| {
+                *program_index != action_index && **action == action_index
+            })
+            .count();
 
         // only change action if there is another learner with this action so actions are not lost
         // if it is not beneficial to ever perform a certain action, learners will have to evolve
@@ -1432,7 +1441,13 @@ fn mutate_team(team: &mut Team, other_team: &mut Team, rng: &mut Rng, counter: &
         let deleted_index = rng.usize(..team.programs.len());
         let deleted_action = team.programs[deleted_index].action;
 
-        let learners_with_action = team_actions.iter().enumerate().filter(|(program_index, action)| *program_index != deleted_index && **action == deleted_action).count();
+        let learners_with_action = team_actions
+            .iter()
+            .enumerate()
+            .filter(|(program_index, action)| {
+                *program_index != deleted_index && **action == deleted_action
+            })
+            .count();
 
         // only delete program if there is another learner with this action so actions are not lost
         // if it is not beneficial to ever perform a certain action, learners will have to evolve
@@ -1440,7 +1455,6 @@ fn mutate_team(team: &mut Team, other_team: &mut Team, rng: &mut Rng, counter: &
         if learners_with_action >= 1 {
             team.programs.remove(deleted_index);
         }
-
     }
 }
 
@@ -1659,7 +1673,14 @@ fn individual_error(team: &Team, fitness_cases: &[FitnessCase]) -> f32 {
     total_steps as f32
 }
 
-fn one_run(run: usize, rng: &mut Rng, fitness_cases: &[FitnessCase], id_counter: &mut u64) -> Team {
+fn one_run(
+    run: usize,
+    rng: &mut Rng,
+    fitness_cases: &[FitnessCase],
+    id_counter: &mut u64,
+    dump: bool,
+    seed: u64,
+) -> Team {
     println!("Starting run # {}", run);
 
     println!("Initializing teams...");
@@ -1691,6 +1712,16 @@ fn one_run(run: usize, rng: &mut Rng, fitness_cases: &[FitnessCase], id_counter:
                 other => other,
             }
         });
+
+        if dump {
+            fs::create_dir_all(format!("dump/{}", seed)).unwrap();
+            let output_path = format!("dump/{}/{}.txt", seed, generation);
+            let mut file = File::create(output_path).unwrap();
+
+            for team in teams.iter() {
+                write!(file, "Fitness {}\n:{}", team.fitness.unwrap(), team).unwrap();
+            }
+        }
 
         // skipping file logging for now
         let mut new_best_found = false;
@@ -1815,16 +1846,31 @@ fn fitness_case_with_constants(inputs: [f32; INPUT_COUNT]) -> FitnessCase {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let matches = App::new("thrillseeker")
+        .arg(
+            Arg::with_name("seed")
+                .short("s")
+                .long("seed")
+                .value_name("seed")
+                .help("Seed the program with a given value"),
+        )
+        .arg(
+            Arg::with_name("dump")
+                .short("d")
+                .long("dump")
+                .help("Dump programs to a text file in the `dump` directory"),
+        )
+        .get_matches();
 
-    let seed = if args.len() > 1 {
-        args.last().unwrap().parse().unwrap()
+    let seed = if let Some(seed_arg) = matches.value_of("seed") {
+        seed_arg.parse().unwrap()
     } else {
         get_seed_value()
     };
-    let seed = 1631745918204;
 
-    println!("Using seed value {}", seed);
+    let dump = matches.is_present("dump");
+
+    println!("Using seed value {}. Dump = {}", seed, dump);
 
     let mut rng = Rng::with_seed(seed);
 
@@ -1844,7 +1890,14 @@ fn main() {
     }
 
     for run in 1..=RUN_COUNT {
-        best_teams.push(one_run(run, &mut rng, &fitness_cases, &mut id_counter));
+        best_teams.push(one_run(
+            run,
+            &mut rng,
+            &fitness_cases,
+            &mut id_counter,
+            dump,
+            seed,
+        ));
     }
 
     println!("Best teams:");
