@@ -1,12 +1,10 @@
-// seed 1623545378569 finds a 3-instruction solution.
-
 use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -23,68 +21,77 @@ fn random_float_in_range(rng: &mut Rng, lower: f32, upper: f32) -> f32 {
 
 const EVALUATE_PARALLEL: bool = true;
 
-const INPUT_COUNT: usize = 4;
-const FITNESS_CASE_COUNT: usize = 100;
-const REGISTER_COUNT: usize = 4;
-const POPULATION_SIZE: usize = 2000;
-const POPULATION_TO_DELETE: usize = 1500;
-const DELETION_POINT: usize = POPULATION_SIZE - POPULATION_TO_DELETE;
-const MAX_PROGRAM_SIZE: usize = 32;
-const MIN_INITIAL_PROGRAM_SIZE: usize = 1;
-const MAX_INITIAL_PROGRAM_SIZE: usize = 8;
-const ACTION_COUNT: usize = 3;
-const MAX_INITIAL_TEAM_SIZE: usize = ACTION_COUNT * 2;
-const MAX_TEAM_SIZE: usize = ACTION_COUNT * 6;
-
-const TOURNAMENT_SIZE: usize = 4;
-const GENERATION_COUNT: usize = 1000;
-const GENERATION_STAGNATION_LIMIT: usize = 50;
-const RUN_COUNT: usize = 1;
-
-const P_DELETE_INSTRUCTION: f32 = 0.7;
-const P_ADD_INSTRUCTION: f32 = 0.7;
-const P_SWAP_INSTRUCTIONS: f32 = 0.7;
-const P_CHANGE_DESTINATION: f32 = 0.1;
-const P_CHANGE_FUNCTION: f32 = 0.1;
-const P_CHANGE_INPUT: f32 = 0.1;
-const P_FLIP_INPUT: f32 = 0.1;
-const P_CHANGE_ACTION: f32 = 0.1;
-
-const P_DELETE_PROGRAM: f32 = 0.5;
-const P_ADD_PROGRAM: f32 = 0.5;
-
-const FITNESS_THRESHOLD: f32 = 45.0 * (FITNESS_CASE_COUNT as f32) + 1.0;
-
+// this can be treated as problem-independent even though a given problem might pick a subset where
+// the actual effective max arity is lower. in general, this code views the function set as relatively
+// problem independent so the slight waste in space in each instruction is something that can be dealt with later
 const MAX_ARITY: usize = 3;
+
+struct ProblemParameters {
+    input_count: usize,
+    fitness_case_count: usize,
+    register_count: usize,
+    population_size: usize,
+    population_to_delete: usize,
+    max_program_size: usize,
+    min_initial_program_size: usize,
+    max_initial_program_size: usize,
+    action_count: usize,
+    max_initial_team_size: usize,
+    max_team_size: usize,
+    tournament_size: usize,
+    generation_count: usize,
+    generation_stagnation_limit: usize,
+    run_count: usize,
+    p_delete_instruction: f32,
+    p_add_instruction: f32,
+    p_swap_instructions: f32,
+    p_change_destination: f32,
+    p_change_function: f32,
+    p_change_input: f32,
+    p_flip_input: f32,
+    p_change_action: f32,
+    p_delete_program: f32,
+    p_add_program: f32,
+    fitness_threshold: f32,
+    legal_functions: Vec<Function>,
+    constant_list: Vec<f32>
+}
+
+impl ProblemParameters {
+    fn deletion_point(&self) -> usize {
+        self.population_size - self.population_to_delete
+    }
+
+    fn fitness_case_size(&self) -> usize {
+        self.input_count + self.constant_list.len()
+    }
+}
 
 const NEGATIVE_TORQUE: f32 = -1.0;
 const POSITIVE_TORQUE: f32 = 1.0;
 
-const FITNESS_CASE_SIZE: usize = INPUT_COUNT + CONSTANT_COUNT;
-type FitnessCase = [f32; FITNESS_CASE_SIZE];
-
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
-enum ProgramAction {
+enum AcrobotAction {
     NegativeTorque,
     DoNothing,
     PositiveTorque,
 }
 
-fn index_to_program_action(index: usize) -> ProgramAction {
+fn index_to_acrobot_action(index: usize) -> AcrobotAction {
     match index {
-        0 => ProgramAction::NegativeTorque,
-        1 => ProgramAction::DoNothing,
-        2 => ProgramAction::PositiveTorque,
+        0 => AcrobotAction::NegativeTorque,
+        1 => AcrobotAction::DoNothing,
+        2 => AcrobotAction::PositiveTorque,
         _ => panic!(),
     }
 }
 
-impl fmt::Display for ProgramAction {
+impl fmt::Display for AcrobotAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ProgramAction::NegativeTorque => write!(f, "Negative_Torque"),
-            ProgramAction::DoNothing => write!(f, "Do_Nothing"),
-            ProgramAction::PositiveTorque => write!(f, "Positive_Torque"),
+            AcrobotAction::NegativeTorque => write!(f, "Negative_Torque"),
+            AcrobotAction::DoNothing => write!(f, "Do_Nothing"),
+            AcrobotAction::PositiveTorque => write!(f, "Positive_Torque"),
         }
     }
 }
@@ -110,34 +117,6 @@ enum Function {
     IfThenElse,
     Copy,
 }
-
-const LEGAL_FUNCTION_COUNT: usize = 18;
-
-const LEGAL_FUNCTIONS: [Function; LEGAL_FUNCTION_COUNT] = [
-    Function::Relu,
-    Function::Plus,
-    Function::Minus,
-    Function::Times,
-    Function::Divide,
-    Function::Square,
-    Function::Sin,
-    Function::Log,
-    Function::And,
-    Function::Or,
-    Function::Not,
-    Function::Xor,
-    Function::Min,
-    Function::Max,
-    Function::Greater,
-    Function::Less,
-    Function::IfThenElse,
-    Function::Copy,
-];
-
-const CONSTANT_COUNT: usize = 1;
-
-// adding more constants seems to hurt things rather than help for acrobot
-const CONSTANT_LIST: [f32; CONSTANT_COUNT] = [0.0];
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -302,7 +281,7 @@ impl Hash for Instruction {
     }
 }
 
-fn random_instruction(rng: &mut Rng) -> Instruction {
+fn random_instruction(rng: &mut Rng, params: &ProblemParameters) -> Instruction {
     let mut instruction = Instruction {
         destination: 0,
         operands: [0; MAX_ARITY],
@@ -311,10 +290,10 @@ fn random_instruction(rng: &mut Rng) -> Instruction {
         index: 0,
     };
 
-    instruction.destination = rng.usize(..REGISTER_COUNT);
+    instruction.destination = rng.usize(..params.register_count);
 
-    let function_index = rng.usize(..LEGAL_FUNCTION_COUNT);
-    let random_function = LEGAL_FUNCTIONS[function_index];
+    let function_index = rng.usize(..params.legal_functions.len());
+    let random_function = params.legal_functions[function_index];
     instruction.op = random_function;
     let arity = function_arity(&random_function);
 
@@ -323,9 +302,9 @@ fn random_instruction(rng: &mut Rng) -> Instruction {
         instruction.is_register[i] = is_register;
 
         let index_range = if is_register {
-            REGISTER_COUNT
+            params.register_count
         } else {
-            FITNESS_CASE_SIZE
+            params.fitness_case_size()
         };
 
         let input_index = rng.usize(..index_range);
@@ -338,9 +317,9 @@ fn random_instruction(rng: &mut Rng) -> Instruction {
 fn active_instructions_from_index(
     instructions: &[Instruction],
     starting_index: usize,
-) -> [bool; MAX_PROGRAM_SIZE] {
-    let mut active_instructions = [false; MAX_PROGRAM_SIZE];
-
+    params: &ProblemParameters
+) -> Vec<bool> {
+    let mut active_instructions = vec![false; params.max_program_size];
     let starting_instruction = instructions[starting_index];
 
     let mut referenced_registers = HashSet::new();
@@ -383,14 +362,18 @@ fn active_instructions_from_index(
 }
 
 #[derive(Debug, Clone)]
-struct Program {
+struct Program<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> {
     active_instructions: Vec<Instruction>,
     introns: Vec<Instruction>,
-    action: usize,
+    action: A,
     id: u64,
 }
 
-impl Program {
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> Program<A> {
     fn restore_introns(&mut self) {
         for intron in self.introns.iter() {
             if intron.index > self.active_instructions.len() {
@@ -402,7 +385,7 @@ impl Program {
         self.introns.clear();
     }
 
-    fn mark_introns(&mut self) {
+    fn mark_introns(&mut self, params: &ProblemParameters) {
         self.restore_introns();
 
         // remark indexes
@@ -437,10 +420,10 @@ impl Program {
         }
 
         let active_instructions =
-            active_instructions_from_index(&self.active_instructions, last_output_index);
+            active_instructions_from_index(&self.active_instructions, last_output_index, params);
 
         let mut new_active_instructions = vec![];
-        new_active_instructions.reserve(MAX_PROGRAM_SIZE);
+        new_active_instructions.reserve(params.max_program_size);
 
         for (active_instruction_index, active_instruction) in active_instructions
             .iter()
@@ -466,7 +449,9 @@ impl Program {
     }
 }
 
-impl Hash for Program {
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> Hash for Program<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.action.hash(state);
         for instruction in self.active_instructions.iter() {
@@ -475,7 +460,9 @@ impl Hash for Program {
     }
 }
 
-impl PartialEq for Program {
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> PartialEq for Program<A> {
     fn eq(&self, other: &Self) -> bool {
         self.action == other.action
             && self
@@ -486,11 +473,15 @@ impl PartialEq for Program {
     }
 }
 
-impl Eq for Program {}
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> Eq for Program<A> {}
 
-impl fmt::Display for Program {
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> fmt::Display for Program<A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        writeln!(f, "\t\tAction: {}", index_to_program_action(self.action)).unwrap();
+        writeln!(f, "\t\tAction: {}", self.action).unwrap();
         writeln!(f, "\t\tID #: {}", self.id).unwrap();
 
         if self.active_instructions.is_empty() {
@@ -504,9 +495,11 @@ impl fmt::Display for Program {
     }
 }
 
-fn evaluate_program(program: &Program, fitness_cases: &[FitnessCase]) -> Vec<f32> {
-    let mut registers: Vec<[f32; REGISTER_COUNT]> =
-        vec![[0.0; REGISTER_COUNT]; fitness_cases.len()];
+fn evaluate_program<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(program: &Program<A>, fitness_cases: &[Vec<f32>],
+                    params: &ProblemParameters) -> Vec<f32> {
+    let mut registers: Vec<Vec<f32>> = vec![vec![0.0; params.register_count]; fitness_cases.len()];
 
     for instruction in program.active_instructions.iter() {
         let destination = instruction.destination;
@@ -1024,10 +1017,13 @@ fn evaluate_program(program: &Program, fitness_cases: &[FitnessCase]) -> Vec<f32
         .collect()
 }
 
-fn size_fair_dependent_instruction_crossover(
-    parent1: &mut Program,
-    parent2: &mut Program,
+fn size_fair_dependent_instruction_crossover<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    parent1: &mut Program<A>,
+    parent2: &mut Program<A>,
     rng: &mut Rng,
+    params: &ProblemParameters
 ) {
     if parent1.active_instructions.is_empty() || parent2.active_instructions.is_empty() {
         return;
@@ -1048,7 +1044,7 @@ fn size_fair_dependent_instruction_crossover(
 
     // 2. calculate its subtree size (number of dependent instructions).
     let parent1_active_indexes =
-        active_instructions_from_index(&parent1.active_instructions, parent1_crossover_index);
+        active_instructions_from_index(&parent1.active_instructions, parent1_crossover_index, params);
     let parent1_subtree_indexes: Vec<usize> = parent1_active_indexes
         .iter()
         .enumerate()
@@ -1058,7 +1054,7 @@ fn size_fair_dependent_instruction_crossover(
     let parent1_active_instruction_count = parent1_subtree_indexes.len();
 
     let parent2_subtree_sizes = (0..parent2.active_instructions.len()).map(|index| {
-        active_instructions_from_index(&parent2.active_instructions, index)
+        active_instructions_from_index(&parent2.active_instructions, index, params)
             .iter()
             .filter(|index2| **index2)
             .count()
@@ -1094,7 +1090,7 @@ fn size_fair_dependent_instruction_crossover(
 
     // 4. copy Parent2's subtree over to Parent1.
     let parent2_active_indexes =
-        active_instructions_from_index(&parent2.active_instructions, closest_subtree_index);
+        active_instructions_from_index(&parent2.active_instructions, closest_subtree_index, params);
     let parent2_subtree_indexes: Vec<usize> = parent2_active_indexes
         .iter()
         .enumerate()
@@ -1117,36 +1113,40 @@ fn size_fair_dependent_instruction_crossover(
     }
 }
 
-fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, counter: &mut u64) {
+fn mutate_program<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(program: &mut Program<A>, team_actions: &[A], rng: &mut Rng, counter: &mut u64,
+                  params: &ProblemParameters,
+  index_to_program_action: fn(usize) -> A,) {
     if program.active_instructions.is_empty() {
         return;
     }
 
     // only run one mutation per program at a time.
-    if program.active_instructions.len() > 1 && coin_flip(P_DELETE_INSTRUCTION, rng) {
+    if program.active_instructions.len() > 1 && coin_flip(params.p_delete_instruction, rng) {
         let delete_index = rng.usize(..program.active_instructions.len());
         program.active_instructions.remove(delete_index);
-    } else if program.active_instructions.len() < MAX_PROGRAM_SIZE
-        && coin_flip(P_ADD_INSTRUCTION, rng)
+    } else if program.active_instructions.len() < params.max_program_size
+        && coin_flip(params.p_add_instruction, rng)
     {
         let add_index = rng.usize(..=program.active_instructions.len());
-        let instruction = random_instruction(rng);
+        let instruction = random_instruction(rng, params);
         program.active_instructions.insert(add_index, instruction);
-    } else if program.active_instructions.len() >= 2 && coin_flip(P_SWAP_INSTRUCTIONS, rng) {
+    } else if program.active_instructions.len() >= 2 && coin_flip(params.p_swap_instructions, rng) {
         let index1 = rng.usize(..program.active_instructions.len());
         let index2 = rng.usize(..program.active_instructions.len());
 
         program.active_instructions.swap(index1, index2);
-    } else if coin_flip(P_CHANGE_DESTINATION, rng) {
+    } else if coin_flip(params.p_change_destination, rng) {
         let index = rng.usize(..program.active_instructions.len());
-        let destination = rng.usize(..REGISTER_COUNT);
+        let destination = rng.usize(..params.register_count);
         program.active_instructions[index].destination = destination;
-    } else if coin_flip(P_CHANGE_FUNCTION, rng) {
+    } else if coin_flip(params.p_change_function, rng) {
         let instruction_index = rng.usize(..program.active_instructions.len());
         let current_op = program.active_instructions[instruction_index].op;
         let current_arity = function_arity(&current_op);
 
-        let equal_arity_functions: Vec<_> = LEGAL_FUNCTIONS
+        let equal_arity_functions: Vec<_> = params.legal_functions
             .iter()
             .filter(|f| function_arity(f) == current_arity)
             .collect();
@@ -1156,7 +1156,7 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
         let new_function_index = rng.usize(..equal_arity_function_count);
         let new_op = equal_arity_functions[new_function_index];
         program.active_instructions[instruction_index].op = *new_op;
-    } else if coin_flip(P_FLIP_INPUT, rng) {
+    } else if coin_flip(params.p_flip_input, rng) {
         let instruction_index = rng.usize(..program.active_instructions.len());
         let instruction_op = program.active_instructions[instruction_index].op;
         let arity = function_arity(&instruction_op);
@@ -1167,11 +1167,11 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
 
         let current_operand = program.active_instructions[instruction_index].operands[input_index];
 
-        if current_operand >= REGISTER_COUNT && is_register {
+        if current_operand >= params.register_count && is_register {
             program.active_instructions[instruction_index].operands[input_index] =
-                rng.usize(..REGISTER_COUNT);
+                rng.usize(..params.register_count);
         }
-    } else if coin_flip(P_CHANGE_INPUT, rng) {
+    } else if coin_flip(params.p_change_input, rng) {
         let instruction_index = rng.usize(..program.active_instructions.len());
 
         let instruction_op = program.active_instructions[instruction_index].op;
@@ -1181,20 +1181,21 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
         let is_register = program.active_instructions[instruction_index].is_register[input_index];
 
         let limit = if is_register {
-            REGISTER_COUNT
+            params.register_count
         } else {
-            FITNESS_CASE_SIZE
+            params.fitness_case_size()
         };
 
         program.active_instructions[instruction_index].operands[input_index] = rng.usize(..limit);
-    } else if coin_flip(P_CHANGE_ACTION, rng) {
-        let action_index = rng.usize(..ACTION_COUNT);
+    } else if coin_flip(params.p_change_action, rng) {
+        let action_index = rng.usize(..params.action_count);
+        let new_action = index_to_program_action(action_index);
 
         let learners_with_action = team_actions
             .iter()
             .enumerate()
             .filter(|(program_index, action)| {
-                *program_index != action_index && **action == action_index
+                *program_index != action_index && **action == new_action
             })
             .count();
 
@@ -1202,7 +1203,7 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
         // if it is not beneficial to ever perform a certain action, learners will have to evolve
         // a no-op program
         if learners_with_action >= 1 {
-            program.action = action_index;
+            program.action = new_action;
         }
     }
 
@@ -1213,24 +1214,29 @@ fn mutate_program(program: &mut Program, team_actions: &[usize], rng: &mut Rng, 
 }
 
 #[derive(Debug, Clone)]
-struct Team {
-    programs: Vec<Program>,
+struct Team<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> {
+    programs: Vec<Program<A>>,
     fitness: Option<f32>,
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
 }
 
-impl Team {
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> Team<A>
+{
     fn restore_introns(&mut self) {
         for program in self.programs.iter_mut() {
             program.restore_introns();
         }
     }
 
-    fn mark_introns(&mut self) {
+    fn mark_introns(&mut self, params: &ProblemParameters) {
         for program in self.programs.iter_mut() {
-            program.mark_introns();
+            program.mark_introns(params);
         }
     }
 
@@ -1244,7 +1250,9 @@ impl Team {
     }
 }
 
-impl PartialEq for Team {
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> PartialEq for Team<A> {
     fn eq(&self, other: &Self) -> bool {
         if self.programs.len() != other.programs.len() {
             return false;
@@ -1257,9 +1265,13 @@ impl PartialEq for Team {
     }
 }
 
-impl Eq for Team {}
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> Eq for Team<A> {}
 
-impl fmt::Display for Team {
+impl<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> fmt::Display for Team<A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "Team ID #{}", self.id).unwrap();
 
@@ -1284,11 +1296,14 @@ impl fmt::Display for Team {
     }
 }
 
-fn initialize_teams(rng: &mut Rng, id_counter: &mut u64) -> Vec<Team> {
+fn initialize_teams<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(rng: &mut Rng, id_counter: &mut u64, params: &ProblemParameters,
+  index_to_program_action: fn(usize) -> A) -> Vec<Team<A>> {
     let mut teams = vec![];
-    teams.reserve(POPULATION_SIZE);
+    teams.reserve(params.population_size);
 
-    while teams.len() < POPULATION_SIZE {
+    while teams.len() < params.population_size {
         let mut team = Team {
             programs: vec![],
             fitness: None,
@@ -1296,39 +1311,39 @@ fn initialize_teams(rng: &mut Rng, id_counter: &mut u64) -> Vec<Team> {
             parent1_id: 0,
             parent2_id: 0,
         };
-        team.programs.reserve(MAX_TEAM_SIZE);
+        team.programs.reserve(params.max_team_size);
 
-        let program_count = rng.usize(..MAX_INITIAL_TEAM_SIZE);
+        let program_count = rng.usize(..params.max_initial_team_size);
 
         let mut program_set = HashSet::new();
-        program_set.reserve(MAX_TEAM_SIZE);
+        program_set.reserve(params.max_team_size);
 
         // make sure each team has at least one of each action type
-        for action_index in 0..ACTION_COUNT {
+        for action_index in 0..params.action_count {
             loop {
                 let mut program = Program {
                     active_instructions: vec![],
                     introns: vec![],
-                    action: action_index,
+                    action: index_to_program_action(action_index),
                     id: 0,
                 };
-                program.active_instructions.reserve(MAX_PROGRAM_SIZE);
-                program.introns.reserve(MAX_PROGRAM_SIZE);
+                program.active_instructions.reserve(params.max_program_size);
+                program.introns.reserve(params.max_program_size);
 
                 let instruction_count =
-                    rng.usize(MIN_INITIAL_PROGRAM_SIZE..MAX_INITIAL_PROGRAM_SIZE);
+                    rng.usize(params.min_initial_program_size..params.max_initial_program_size);
 
                 for _ in 0..instruction_count {
-                    let instruction = random_instruction(rng);
+                    let instruction = random_instruction(rng, params);
                     program.active_instructions.push(instruction);
                 }
 
-                program.mark_introns();
+                program.mark_introns(params);
 
                 // clear introns so that initially all code is active
                 program.introns.clear();
                 // just to set indexes properly
-                program.mark_introns();
+                program.mark_introns(params);
 
                 if !program_set.contains(&program) && !program.active_instructions.is_empty() {
                     *id_counter += 1;
@@ -1342,7 +1357,7 @@ fn initialize_teams(rng: &mut Rng, id_counter: &mut u64) -> Vec<Team> {
         }
 
         while team.programs.len() < program_count {
-            let action = rng.usize(..ACTION_COUNT);
+            let action = index_to_program_action(rng.usize(..params.action_count));
             loop {
                 let mut program = Program {
                     active_instructions: vec![],
@@ -1350,14 +1365,14 @@ fn initialize_teams(rng: &mut Rng, id_counter: &mut u64) -> Vec<Team> {
                     action,
                     id: 0,
                 };
-                program.active_instructions.reserve(MAX_PROGRAM_SIZE);
-                program.introns.reserve(MAX_PROGRAM_SIZE);
+                program.active_instructions.reserve(params.max_program_size);
+                program.introns.reserve(params.max_program_size);
 
                 let instruction_count =
-                    rng.usize(MIN_INITIAL_PROGRAM_SIZE..MAX_INITIAL_PROGRAM_SIZE);
+                    rng.usize(params.min_initial_program_size..params.max_initial_program_size);
 
                 for _ in 0..instruction_count {
-                    let instruction = random_instruction(rng);
+                    let instruction = random_instruction(rng, params);
                     program.active_instructions.push(instruction);
                 }
 
@@ -1380,11 +1395,13 @@ fn initialize_teams(rng: &mut Rng, id_counter: &mut u64) -> Vec<Team> {
     teams
 }
 
-fn evaluate_team(team: &Team, fitness_cases: &[FitnessCase]) -> Vec<ProgramAction> {
+fn evaluate_team<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(team: &Team<A>, fitness_cases: &[Vec<f32>], params: &ProblemParameters) -> Vec<A> {
     let team_outputs: Vec<Vec<f32>> = team
         .programs
         .iter()
-        .map(|p| evaluate_program(p, fitness_cases))
+        .map(|p| evaluate_program(p, fitness_cases, params))
         .collect();
 
     fitness_cases
@@ -1400,13 +1417,14 @@ fn evaluate_team(team: &Team, fitness_cases: &[FitnessCase]) -> Vec<ProgramActio
                 .map(|(index, _)| team.programs[index].action)
                 .unwrap()
         })
-        .map(index_to_program_action)
         .collect()
 }
 
-fn tournament_selection(teams: &[Team], rng: &mut Rng) -> usize {
-    (0..TOURNAMENT_SIZE)
-        .map(|_| rng.usize(..DELETION_POINT))
+fn tournament_selection<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(teams: &[Team<A>], rng: &mut Rng, params: &ProblemParameters) -> usize {
+    (0..params.tournament_size)
+        .map(|_| rng.usize(..params.deletion_point()))
         .max_by(|index1, index2| {
             match teams[*index1]
                 .fitness
@@ -1424,20 +1442,29 @@ fn tournament_selection(teams: &[Team], rng: &mut Rng) -> usize {
         .unwrap()
 }
 
-fn mutate_team(team: &mut Team, other_team: &mut Team, rng: &mut Rng, counter: &mut u64) {
+fn mutate_team<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    team: &mut Team<A>,
+    other_team: &mut Team<A>,
+    rng: &mut Rng,
+    counter: &mut u64,
+    params: &ProblemParameters,
+    index_to_program_action: fn(usize) -> A,
+) {
     let team_actions: Vec<_> = team.programs.iter().map(|p| p.action).collect();
 
     for program in team.programs.iter_mut() {
-        mutate_program(program, &team_actions, rng, counter);
+        mutate_program(program, &team_actions, rng, counter, params, index_to_program_action);
     }
 
-    if team.programs.len() < MAX_TEAM_SIZE && coin_flip(P_ADD_PROGRAM, rng) {
+    if team.programs.len() < params.max_team_size && coin_flip(params.p_add_program, rng) {
         let other_team_index = rng.usize(..other_team.programs.len());
         team.programs
             .push(other_team.programs[other_team_index].clone());
     }
 
-    if team.programs.len() > 1 && coin_flip(P_DELETE_PROGRAM, rng) {
+    if team.programs.len() > 1 && coin_flip(params.p_delete_program, rng) {
         let deleted_index = rng.usize(..team.programs.len());
         let deleted_action = team.programs[deleted_index].action;
 
@@ -1458,7 +1485,14 @@ fn mutate_team(team: &mut Team, other_team: &mut Team, rng: &mut Rng, counter: &
     }
 }
 
-fn team_crossover(team1: &mut Team, team2: &mut Team, rng: &mut Rng) {
+fn team_crossover<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    team1: &mut Team<A>,
+    team2: &mut Team<A>,
+    rng: &mut Rng,
+    params: &ProblemParameters,
+) {
     assert!(team1.programs.len() <= team2.programs.len());
 
     // shuffle programs so that we can iterate in order without bias
@@ -1473,24 +1507,27 @@ fn team_crossover(team1: &mut Team, team2: &mut Team, rng: &mut Rng) {
         for team2_program in team2.programs.iter_mut() {
             let team2_action = team2_program.action;
             if team1_action == team2_action && !used_team2_ids.contains(&team2.id) {
-                size_fair_dependent_instruction_crossover(team1_program, team2_program, rng);
+                size_fair_dependent_instruction_crossover(team1_program, team2_program, rng, params);
             }
         }
     }
 }
 
-fn evaluate_teams(teams: &mut Vec<Team>, fitness_cases: &[FitnessCase]) {
+fn evaluate_teams<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(teams: &mut Vec<Team<A>>, fitness_cases: &[Vec<f32>],
+  individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters) -> f32, params: &ProblemParameters) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
             // tracking skipped evaluations the way we do in c++ code is not very helpful now
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases));
+                team.fitness = Some(individual_error(team, fitness_cases, params));
             }
         });
     } else {
         for team in teams.iter_mut() {
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases));
+                team.fitness = Some(individual_error(team, fitness_cases, params));
             }
         }
     }
@@ -1611,8 +1648,8 @@ fn runge_kutta(y0: [f32; 5], t: [f32; 2]) -> [[f32; 5]; 2] {
     y_out
 }
 
-fn individual_error(team: &Team, fitness_cases: &[FitnessCase]) -> f32 {
-    let mut steps: Vec<usize> = vec![0; FITNESS_CASE_COUNT];
+fn acrobot_individual_error(team: &Team<AcrobotAction>, fitness_cases: &[Vec<f32>], params: &ProblemParameters) -> f32 {
+    let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
 
     let mut total_steps = 0;
 
@@ -1625,15 +1662,15 @@ fn individual_error(team: &Team, fitness_cases: &[FitnessCase]) -> f32 {
             break;
         }
 
-        let outputs = evaluate_team(team, &state);
+        let outputs = evaluate_team(team, &state, params);
 
         let mut to_delete = vec![false; outputs.len()];
 
         for (output_index, (current_state, output)) in state.iter_mut().zip(&outputs).enumerate() {
             let torque = match output {
-                ProgramAction::NegativeTorque => NEGATIVE_TORQUE,
-                ProgramAction::DoNothing => 0.0,
-                ProgramAction::PositiveTorque => POSITIVE_TORQUE,
+                AcrobotAction::NegativeTorque => NEGATIVE_TORQUE,
+                AcrobotAction::DoNothing => 0.0,
+                AcrobotAction::PositiveTorque => POSITIVE_TORQUE,
             };
 
             let augmented_state = [
@@ -1673,19 +1710,24 @@ fn individual_error(team: &Team, fitness_cases: &[FitnessCase]) -> f32 {
     total_steps as f32
 }
 
-fn one_run(
+fn one_run<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
     run: usize,
     rng: &mut Rng,
-    fitness_cases: &[FitnessCase],
+    fitness_cases: &[Vec<f32>],
+    params: &ProblemParameters,
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters) -> f32,
+    index_to_program_action: fn(usize) -> A,
     id_counter: &mut u64,
     dump: bool,
     seed: u64,
-) -> Team {
+) -> Team<A> {
     println!("Starting run # {}", run);
 
     println!("Initializing teams...");
 
-    let mut teams = initialize_teams(rng, id_counter);
+    let mut teams = initialize_teams(rng, id_counter, params, index_to_program_action);
     println!("Done.");
 
     let mut best_team = teams[0].clone();
@@ -1694,9 +1736,9 @@ fn one_run(
 
     let mut stagnation_count = 0;
 
-    for generation in 1..=GENERATION_COUNT {
+    for generation in 1..=params.generation_count {
         println!("Starting generation {}", generation);
-        evaluate_teams(&mut teams, fitness_cases);
+        evaluate_teams(&mut teams, fitness_cases, individual_error, params);
 
         teams.sort_by(|team1, team2| {
             match team1
@@ -1739,7 +1781,7 @@ fn one_run(
                 println!("{}", team);
             }
 
-            if team.fitness.unwrap() < FITNESS_THRESHOLD {
+            if team.fitness.unwrap() < params.fitness_threshold {
                 optimal_team_found = true;
                 println!(
                     "Optimal found in run #{}, generation {}, with fitness {}:",
@@ -1763,29 +1805,29 @@ fn one_run(
             println!("Stagnation count has increased to {}", stagnation_count);
         }
 
-        if stagnation_count > GENERATION_STAGNATION_LIMIT {
+        if stagnation_count > params.generation_stagnation_limit {
             println!(
                 "Stagnation count exceeds limit of {}, exiting",
-                GENERATION_STAGNATION_LIMIT
+                params.generation_stagnation_limit
             );
             break;
         }
 
         // TODO calculate and display min/max/median fitness
 
-        teams.truncate(DELETION_POINT);
-        assert!(teams.len() == DELETION_POINT);
+        teams.truncate(params.deletion_point());
+        assert_eq!(teams.len(), params.deletion_point());
 
-        while teams.len() < POPULATION_SIZE {
+        while teams.len() < params.population_size {
             loop {
-                let parent1_index = tournament_selection(&teams, rng);
+                let parent1_index = tournament_selection(&teams, rng, params);
                 let mut parent1 = teams[parent1_index].clone();
 
                 let previous_team = parent1.clone();
 
                 parent1.restore_introns();
 
-                let parent2_index = tournament_selection(&teams, rng);
+                let parent2_index = tournament_selection(&teams, rng, params);
                 let mut parent2 = teams[parent2_index].clone();
 
                 parent2.restore_introns();
@@ -1794,14 +1836,14 @@ fn one_run(
                 let parent2_id = parent2.id;
 
                 if parent1.programs.len() <= parent2.programs.len() {
-                    team_crossover(&mut parent1, &mut parent2, rng);
+                    team_crossover(&mut parent1, &mut parent2, rng, params);
                 } else {
-                    team_crossover(&mut parent2, &mut parent1, rng);
+                    team_crossover(&mut parent2, &mut parent1, rng, params);
                     parent1 = parent2.clone();
                 }
 
-                mutate_team(&mut parent1, &mut parent2, rng, id_counter);
-                parent1.mark_introns();
+                mutate_team(&mut parent1, &mut parent2, rng, id_counter, params, index_to_program_action);
+                parent1.mark_introns(params);
 
                 if previous_team != parent1 {
                     *id_counter += 1;
@@ -1829,15 +1871,15 @@ fn get_seed_value() -> u64 {
         .as_millis() as u64
 }
 
-fn fitness_case_with_constants(inputs: [f32; INPUT_COUNT]) -> FitnessCase {
-    let mut output = [0.0; FITNESS_CASE_SIZE];
+fn fitness_case_with_constants(inputs: Vec<f32>, params: &ProblemParameters) -> Vec<f32> {
+    let mut output = vec![0.0; params.fitness_case_size()];
 
     for (i, input) in inputs.iter().enumerate() {
         output[i] = *input;
     }
 
-    for (i, constant) in CONSTANT_LIST.iter().enumerate() {
-        let target_index = i + INPUT_COUNT;
+    for (i, constant) in params.constant_list.iter().enumerate() {
+        let target_index = i + params.input_count;
         output[target_index] = *constant;
     }
 
@@ -1875,24 +1917,79 @@ fn main() {
 
     let mut id_counter: u64 = 1;
 
-    let mut best_teams: Vec<Team> = vec![];
+    let mut best_teams: Vec<Team<AcrobotAction>> = vec![];
 
-    let mut fitness_cases: Vec<FitnessCase> = vec![];
+    let mut fitness_cases: Vec<Vec<f32>> = vec![];
 
-    for _ in 0..FITNESS_CASE_COUNT {
+    let acrobot_parameters = ProblemParameters {
+        input_count: 4,
+        fitness_case_count: 100,
+        register_count: 4,
+        population_size: 2000,
+        population_to_delete: 1500,
+        max_program_size: 32,
+        min_initial_program_size: 1,
+        max_initial_program_size: 8,
+        action_count: 3,
+        max_initial_team_size: 6,
+        max_team_size: 15,
+        tournament_size: 4,
+        generation_count: 1000,
+        generation_stagnation_limit: 50,
+        run_count: 1,
+        p_delete_instruction: 0.7,
+        p_add_instruction: 0.7,
+        p_swap_instructions: 0.7,
+        p_change_destination: 0.7,
+        p_change_function: 0.1,
+        p_change_input: 0.1,
+        p_flip_input: 0.1,
+        p_change_action: 0.1,
+        p_delete_program: 0.5,
+        p_add_program: 0.5,
+        fitness_threshold: 45.0*(100.0) + 1.0,
+        legal_functions: vec![
+            Function::Relu,
+            Function::Plus,
+            Function::Minus,
+            Function::Times,
+            Function::Divide,
+            Function::Square,
+            Function::Sin,
+            Function::Log,
+            Function::And,
+            Function::Or,
+            Function::Not,
+            Function::Xor,
+            Function::Min,
+            Function::Max,
+            Function::Greater,
+            Function::Less,
+            Function::IfThenElse,
+            Function::Copy
+        ],
+        constant_list: vec![
+            0.0
+        ]
+    };
+
+    for _ in 0..acrobot_parameters.fitness_case_count {
         let x1 = random_float_in_range(&mut rng, -0.1, 0.1);
         let v1 = random_float_in_range(&mut rng, -0.1, 0.1);
         let x2 = random_float_in_range(&mut rng, -0.1, 0.1);
         let v2 = random_float_in_range(&mut rng, -0.1, 0.1);
 
-        fitness_cases.push(fitness_case_with_constants([x1, v1, x2, v2]));
+        fitness_cases.push(fitness_case_with_constants(vec![x1, v1, x2, v2], &acrobot_parameters));
     }
 
-    for run in 1..=RUN_COUNT {
+    for run in 1..=acrobot_parameters.run_count {
         best_teams.push(one_run(
             run,
             &mut rng,
             &fitness_cases,
+            &acrobot_parameters,
+            acrobot_individual_error,
+             index_to_acrobot_action,
             &mut id_counter,
             dump,
             seed,
