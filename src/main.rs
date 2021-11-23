@@ -1,5 +1,6 @@
 mod acrobot;
 
+use crate::acrobot::AcrobotAction;
 use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
@@ -1739,9 +1740,16 @@ fn fitness_case_with_constants(inputs: Vec<f32>, params: &ProblemParameters) -> 
     output
 }
 
-// PROBLEM SPECIFIC CODE BEGINS
+fn print_best_teams(best_teams: Vec<Team<AcrobotAction>>) {
+    println!("Best teams:");
 
-fn main() {
+    for best_team in best_teams.iter() {
+        println!("Fitness {}:", best_team.fitness.unwrap());
+        println!("{}\n", best_team);
+    }
+}
+
+fn setup() -> (u64, bool, Rng) {
     let matches = App::new("thrillseeker")
         .arg(
             Arg::with_name("seed")
@@ -1768,16 +1776,16 @@ fn main() {
 
     println!("Using seed value {}. Dump = {}", seed, dump);
 
-    let mut rng = Rng::with_seed(seed);
+    let rng = Rng::with_seed(seed);
+    (seed, dump, rng)
+}
+
+fn main() {
+    let (seed, dump, mut rng) = setup();
 
     let best_teams = acrobot::acrobot_runs(seed, dump, &mut rng);
 
-    println!("Best teams:");
-
-    for best_team in best_teams.iter() {
-        println!("Fitness {}:", best_team.fitness.unwrap());
-        println!("{}\n", best_team);
-    }
+    print_best_teams(best_teams);
 
     println!("Ran with seed {}", seed);
 }

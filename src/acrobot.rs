@@ -1,6 +1,6 @@
-use std::fmt;
-use fastrand::Rng;
 use crate::{Function, ProblemParameters, Team};
+use fastrand::Rng;
+use std::fmt;
 
 #[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AcrobotAction {
