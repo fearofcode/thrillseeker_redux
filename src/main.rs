@@ -54,7 +54,7 @@ struct ProblemParameters {
     p_add_program: f32,
     fitness_threshold: f32,
     legal_functions: Vec<Function>,
-    constant_list: Vec<f32>
+    constant_list: Vec<f32>,
 }
 
 impl ProblemParameters {
@@ -64,35 +64,6 @@ impl ProblemParameters {
 
     fn fitness_case_size(&self) -> usize {
         self.input_count + self.constant_list.len()
-    }
-}
-
-const NEGATIVE_TORQUE: f32 = -1.0;
-const POSITIVE_TORQUE: f32 = 1.0;
-
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
-enum AcrobotAction {
-    NegativeTorque,
-    DoNothing,
-    PositiveTorque,
-}
-
-fn index_to_acrobot_action(index: usize) -> AcrobotAction {
-    match index {
-        0 => AcrobotAction::NegativeTorque,
-        1 => AcrobotAction::DoNothing,
-        2 => AcrobotAction::PositiveTorque,
-        _ => panic!(),
-    }
-}
-
-impl fmt::Display for AcrobotAction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AcrobotAction::NegativeTorque => write!(f, "Negative_Torque"),
-            AcrobotAction::DoNothing => write!(f, "Do_Nothing"),
-            AcrobotAction::PositiveTorque => write!(f, "Positive_Torque"),
-        }
     }
 }
 
@@ -317,7 +288,7 @@ fn random_instruction(rng: &mut Rng, params: &ProblemParameters) -> Instruction 
 fn active_instructions_from_index(
     instructions: &[Instruction],
     starting_index: usize,
-    params: &ProblemParameters
+    params: &ProblemParameters,
 ) -> Vec<bool> {
     let mut active_instructions = vec![false; params.max_program_size];
     let starting_instruction = instructions[starting_index];
@@ -372,8 +343,9 @@ struct Program<
 }
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> Program<A> {
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > Program<A>
+{
     fn restore_introns(&mut self) {
         for intron in self.introns.iter() {
             if intron.index > self.active_instructions.len() {
@@ -450,8 +422,9 @@ impl<
 }
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> Hash for Program<A> {
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > Hash for Program<A>
+{
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.action.hash(state);
         for instruction in self.active_instructions.iter() {
@@ -461,8 +434,9 @@ impl<
 }
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> PartialEq for Program<A> {
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > PartialEq for Program<A>
+{
     fn eq(&self, other: &Self) -> bool {
         self.action == other.action
             && self
@@ -474,12 +448,15 @@ impl<
 }
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> Eq for Program<A> {}
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > Eq for Program<A>
+{
+}
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> fmt::Display for Program<A> {
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > fmt::Display for Program<A>
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "\t\tAction: {}", self.action).unwrap();
         writeln!(f, "\t\tID #: {}", self.id).unwrap();
@@ -497,8 +474,11 @@ impl<
 
 fn evaluate_program<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(program: &Program<A>, fitness_cases: &[Vec<f32>],
-                    params: &ProblemParameters) -> Vec<f32> {
+>(
+    program: &Program<A>,
+    fitness_cases: &[Vec<f32>],
+    params: &ProblemParameters,
+) -> Vec<f32> {
     let mut registers: Vec<Vec<f32>> = vec![vec![0.0; params.register_count]; fitness_cases.len()];
 
     for instruction in program.active_instructions.iter() {
@@ -1023,7 +1003,7 @@ fn size_fair_dependent_instruction_crossover<
     parent1: &mut Program<A>,
     parent2: &mut Program<A>,
     rng: &mut Rng,
-    params: &ProblemParameters
+    params: &ProblemParameters,
 ) {
     if parent1.active_instructions.is_empty() || parent2.active_instructions.is_empty() {
         return;
@@ -1043,8 +1023,11 @@ fn size_fair_dependent_instruction_crossover<
     let parent1_crossover_index = rng.usize(..parent1.active_instructions.len());
 
     // 2. calculate its subtree size (number of dependent instructions).
-    let parent1_active_indexes =
-        active_instructions_from_index(&parent1.active_instructions, parent1_crossover_index, params);
+    let parent1_active_indexes = active_instructions_from_index(
+        &parent1.active_instructions,
+        parent1_crossover_index,
+        params,
+    );
     let parent1_subtree_indexes: Vec<usize> = parent1_active_indexes
         .iter()
         .enumerate()
@@ -1115,9 +1098,14 @@ fn size_fair_dependent_instruction_crossover<
 
 fn mutate_program<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(program: &mut Program<A>, team_actions: &[A], rng: &mut Rng, counter: &mut u64,
-                  params: &ProblemParameters,
-  index_to_program_action: fn(usize) -> A,) {
+>(
+    program: &mut Program<A>,
+    team_actions: &[A],
+    rng: &mut Rng,
+    counter: &mut u64,
+    params: &ProblemParameters,
+    index_to_program_action: fn(usize) -> A,
+) {
     if program.active_instructions.is_empty() {
         return;
     }
@@ -1146,7 +1134,8 @@ fn mutate_program<
         let current_op = program.active_instructions[instruction_index].op;
         let current_arity = function_arity(&current_op);
 
-        let equal_arity_functions: Vec<_> = params.legal_functions
+        let equal_arity_functions: Vec<_> = params
+            .legal_functions
             .iter()
             .filter(|f| function_arity(f) == current_arity)
             .collect();
@@ -1225,8 +1214,8 @@ struct Team<
 }
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> Team<A>
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > Team<A>
 {
     fn restore_introns(&mut self) {
         for program in self.programs.iter_mut() {
@@ -1251,8 +1240,9 @@ impl<
 }
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> PartialEq for Team<A> {
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > PartialEq for Team<A>
+{
     fn eq(&self, other: &Self) -> bool {
         if self.programs.len() != other.programs.len() {
             return false;
@@ -1266,12 +1256,15 @@ impl<
 }
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> Eq for Team<A> {}
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > Eq for Team<A>
+{
+}
 
 impl<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> fmt::Display for Team<A> {
+        A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > fmt::Display for Team<A>
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "Team ID #{}", self.id).unwrap();
 
@@ -1298,8 +1291,12 @@ impl<
 
 fn initialize_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(rng: &mut Rng, id_counter: &mut u64, params: &ProblemParameters,
-  index_to_program_action: fn(usize) -> A) -> Vec<Team<A>> {
+>(
+    rng: &mut Rng,
+    id_counter: &mut u64,
+    params: &ProblemParameters,
+    index_to_program_action: fn(usize) -> A,
+) -> Vec<Team<A>> {
     let mut teams = vec![];
     teams.reserve(params.population_size);
 
@@ -1397,7 +1394,11 @@ fn initialize_teams<
 
 fn evaluate_team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(team: &Team<A>, fitness_cases: &[Vec<f32>], params: &ProblemParameters) -> Vec<A> {
+>(
+    team: &Team<A>,
+    fitness_cases: &[Vec<f32>],
+    params: &ProblemParameters,
+) -> Vec<A> {
     let team_outputs: Vec<Vec<f32>> = team
         .programs
         .iter()
@@ -1422,7 +1423,11 @@ fn evaluate_team<
 
 fn tournament_selection<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(teams: &[Team<A>], rng: &mut Rng, params: &ProblemParameters) -> usize {
+>(
+    teams: &[Team<A>],
+    rng: &mut Rng,
+    params: &ProblemParameters,
+) -> usize {
     (0..params.tournament_size)
         .map(|_| rng.usize(..params.deletion_point()))
         .max_by(|index1, index2| {
@@ -1455,7 +1460,14 @@ fn mutate_team<
     let team_actions: Vec<_> = team.programs.iter().map(|p| p.action).collect();
 
     for program in team.programs.iter_mut() {
-        mutate_program(program, &team_actions, rng, counter, params, index_to_program_action);
+        mutate_program(
+            program,
+            &team_actions,
+            rng,
+            counter,
+            params,
+            index_to_program_action,
+        );
     }
 
     if team.programs.len() < params.max_team_size && coin_flip(params.p_add_program, rng) {
@@ -1507,7 +1519,12 @@ fn team_crossover<
         for team2_program in team2.programs.iter_mut() {
             let team2_action = team2_program.action;
             if team1_action == team2_action && !used_team2_ids.contains(&team2.id) {
-                size_fair_dependent_instruction_crossover(team1_program, team2_program, rng, params);
+                size_fair_dependent_instruction_crossover(
+                    team1_program,
+                    team2_program,
+                    rng,
+                    params,
+                );
             }
         }
     }
@@ -1515,8 +1532,12 @@ fn team_crossover<
 
 fn evaluate_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(teams: &mut Vec<Team<A>>, fitness_cases: &[Vec<f32>],
-  individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters) -> f32, params: &ProblemParameters) {
+>(
+    teams: &mut Vec<Team<A>>,
+    fitness_cases: &[Vec<f32>],
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters) -> f32,
+    params: &ProblemParameters,
+) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
             // tracking skipped evaluations the way we do in c++ code is not very helpful now
@@ -1531,183 +1552,6 @@ fn evaluate_teams<
             }
         }
     }
-}
-
-fn wrap(x: f32, m1: f32, m2: f32) -> f32 {
-    let mut x2 = x;
-    let diff = m2 - m1;
-    while x2 > m2 {
-        x2 -= diff;
-    }
-
-    while x2 < m1 {
-        x2 += diff;
-    }
-
-    x2
-}
-
-fn bound(x: f32, m1: f32, m2: f32) -> f32 {
-    x.max(m1).min(m2)
-}
-
-const DT: f32 = 0.2;
-
-const LINK_LENGTH_1: f32 = 1.0;
-const LINK_MASS_1: f32 = 1.0;
-const LINK_MASS_2: f32 = 1.0;
-const LINK_COM_POS_1: f32 = 0.5;
-const LINK_COM_POS_2: f32 = 0.5;
-const LINK_MOI: f32 = 1.0;
-
-const M_PI: f32 = std::f32::consts::PI;
-const MAX_VEL_1: f32 = 4.0 * M_PI;
-const MAX_VEL_2: f32 = 9.0 * M_PI;
-
-const M1: f32 = LINK_MASS_1;
-const M2: f32 = LINK_MASS_2;
-const L1: f32 = LINK_LENGTH_1;
-const LC1: f32 = LINK_COM_POS_1;
-const LC2: f32 = LINK_COM_POS_2;
-const I1: f32 = LINK_MOI;
-const I2: f32 = LINK_MOI;
-const G: f32 = 9.8;
-const PI: f32 = M_PI;
-
-fn square(x: f32) -> f32 {
-    x * x
-}
-
-fn state_derivative(augmented_state: [f32; 5]) -> [f32; 5] {
-    let a = augmented_state[4];
-    let theta1 = augmented_state[0];
-    let theta2 = augmented_state[1];
-    let dtheta1 = augmented_state[2];
-    let dtheta2 = augmented_state[3];
-
-    let theta2_cos = theta2.cos();
-    let sin_theta2 = theta2.sin();
-    let d1 =
-        M1 * square(LC1) + M2 * (square(L1) + square(LC2) + 2.0 * L1 * LC2 * theta2_cos) + I1 + I2;
-    let d2 = M2 * (square(LC2) + L1 * LC2 * theta2_cos) + I2;
-    let phi2 = M2 * LC2 * G * (theta1 + theta2 - PI / 2.0).cos();
-    let phi1 = -M2 * L1 * LC2 * square(dtheta2) * sin_theta2
-        - 2.0 * M2 * L1 * LC2 * dtheta2 * dtheta1 * sin_theta2
-        + (M1 * LC1 + M2 * L1) * G * (theta1 - PI / 2.0).cos()
-        + phi2;
-
-    let ddtheta2 = (a + d2 / d1 * phi1 - M2 * L1 * LC2 * square(dtheta1) * sin_theta2 - phi2)
-        / (M2 * square(LC2) + I2 - square(d2) / d1);
-    let ddtheta1 = -(d2 * ddtheta2 + phi1) / d1;
-
-    [dtheta1, dtheta2, ddtheta1, ddtheta2, 0.]
-}
-
-fn a_plus_by(a: [f32; 5], b: f32, y: [f32; 5]) -> [f32; 5] {
-    [
-        a[0] + b * y[0],
-        a[1] + b * y[1],
-        a[2] + b * y[2],
-        a[3] + b * y[3],
-        a[4] + b * y[4],
-    ]
-}
-
-fn vector_sum(x: [f32; 5], y: [f32; 5]) -> [f32; 5] {
-    [
-        x[0] + y[0],
-        x[1] + y[1],
-        x[2] + y[2],
-        x[3] + y[3],
-        x[4] + y[4],
-    ]
-}
-
-fn runge_kutta(y0: [f32; 5], t: [f32; 2]) -> [[f32; 5]; 2] {
-    let mut y_out = [[0.0; 5]; 2];
-    y_out[0] = y0;
-
-    let i = 0;
-
-    let thist = t[i];
-    let dt = t[i + 1] - thist;
-
-    let dt2 = dt / 2.0;
-
-    let k1 = state_derivative(y0);
-    let k2 = state_derivative(a_plus_by(y0, dt2, k1));
-    let k3 = state_derivative(a_plus_by(y0, dt2, k2));
-    let k4 = state_derivative(a_plus_by(y0, dt, k3));
-    //   Y_Out[I + 1] = Y0 + (dt / 6.0) * (K1 + 2 * K2 + 2 * K3 + K4);
-    y_out[i + 1] = a_plus_by(
-        y0,
-        dt / 6.0,
-        vector_sum(a_plus_by(k1, 2.0, k2), a_plus_by(k4, 2.0, k3)),
-    );
-
-    y_out
-}
-
-fn acrobot_individual_error(team: &Team<AcrobotAction>, fitness_cases: &[Vec<f32>], params: &ProblemParameters) -> f32 {
-    let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
-
-    let mut total_steps = 0;
-
-    let mut state = fitness_cases.to_owned();
-
-    let episode_limit = 500;
-
-    loop {
-        if state.is_empty() {
-            break;
-        }
-
-        let outputs = evaluate_team(team, &state, params);
-
-        let mut to_delete = vec![false; outputs.len()];
-
-        for (output_index, (current_state, output)) in state.iter_mut().zip(&outputs).enumerate() {
-            let torque = match output {
-                AcrobotAction::NegativeTorque => NEGATIVE_TORQUE,
-                AcrobotAction::DoNothing => 0.0,
-                AcrobotAction::PositiveTorque => POSITIVE_TORQUE,
-            };
-
-            let augmented_state = [
-                current_state[0],
-                current_state[1],
-                current_state[2],
-                current_state[3],
-                torque,
-            ];
-
-            let integrated = runge_kutta(augmented_state, [0.0, DT]);
-            let new_state = integrated[1];
-
-            current_state[0] = wrap(new_state[0], -PI, PI);
-            current_state[1] = wrap(new_state[1], -PI, PI);
-            current_state[2] = bound(new_state[2], -MAX_VEL_1, MAX_VEL_1);
-            current_state[3] = bound(new_state[3], -MAX_VEL_2, MAX_VEL_2);
-
-            let done =
-                (-current_state[0].cos() - (current_state[1] + current_state[0]).cos()) > 1.0;
-            if done || (steps[output_index] >= episode_limit) {
-                total_steps += steps[output_index];
-                to_delete[output_index] = true;
-            } else {
-                steps[output_index] += 1;
-            }
-        }
-
-        state = state
-            .into_iter()
-            .zip(to_delete)
-            .filter(|(_, delete)| !(*delete))
-            .map(|(s, _)| s)
-            .collect();
-    }
-
-    total_steps as f32
 }
 
 fn one_run<
@@ -1842,7 +1686,14 @@ fn one_run<
                     parent1 = parent2.clone();
                 }
 
-                mutate_team(&mut parent1, &mut parent2, rng, id_counter, params, index_to_program_action);
+                mutate_team(
+                    &mut parent1,
+                    &mut parent2,
+                    rng,
+                    id_counter,
+                    params,
+                    index_to_program_action,
+                );
                 parent1.mark_introns(params);
 
                 if previous_team != parent1 {
@@ -1884,6 +1735,218 @@ fn fitness_case_with_constants(inputs: Vec<f32>, params: &ProblemParameters) -> 
     }
 
     output
+}
+
+// PROBLEM SPECIFIC CODE BEGINS
+
+const NEGATIVE_TORQUE: f32 = -1.0;
+const POSITIVE_TORQUE: f32 = 1.0;
+
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+enum AcrobotAction {
+    NegativeTorque,
+    DoNothing,
+    PositiveTorque,
+}
+
+fn index_to_acrobot_action(index: usize) -> AcrobotAction {
+    match index {
+        0 => AcrobotAction::NegativeTorque,
+        1 => AcrobotAction::DoNothing,
+        2 => AcrobotAction::PositiveTorque,
+        _ => panic!(),
+    }
+}
+
+impl fmt::Display for AcrobotAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AcrobotAction::NegativeTorque => write!(f, "Negative_Torque"),
+            AcrobotAction::DoNothing => write!(f, "Do_Nothing"),
+            AcrobotAction::PositiveTorque => write!(f, "Positive_Torque"),
+        }
+    }
+}
+
+fn wrap(x: f32, m1: f32, m2: f32) -> f32 {
+    let mut x2 = x;
+    let diff = m2 - m1;
+    while x2 > m2 {
+        x2 -= diff;
+    }
+
+    while x2 < m1 {
+        x2 += diff;
+    }
+
+    x2
+}
+
+fn bound(x: f32, m1: f32, m2: f32) -> f32 {
+    x.max(m1).min(m2)
+}
+
+const DT: f32 = 0.2;
+
+const LINK_LENGTH_1: f32 = 1.0;
+const LINK_MASS_1: f32 = 1.0;
+const LINK_MASS_2: f32 = 1.0;
+const LINK_COM_POS_1: f32 = 0.5;
+const LINK_COM_POS_2: f32 = 0.5;
+const LINK_MOI: f32 = 1.0;
+
+const M_PI: f32 = std::f32::consts::PI;
+const MAX_VEL_1: f32 = 4.0 * M_PI;
+const MAX_VEL_2: f32 = 9.0 * M_PI;
+
+const M1: f32 = LINK_MASS_1;
+const M2: f32 = LINK_MASS_2;
+const L1: f32 = LINK_LENGTH_1;
+const LC1: f32 = LINK_COM_POS_1;
+const LC2: f32 = LINK_COM_POS_2;
+const I1: f32 = LINK_MOI;
+const I2: f32 = LINK_MOI;
+const G: f32 = 9.8;
+const PI: f32 = M_PI;
+
+fn square(x: f32) -> f32 {
+    x * x
+}
+
+fn state_derivative(augmented_state: [f32; 5]) -> [f32; 5] {
+    let a = augmented_state[4];
+    let theta1 = augmented_state[0];
+    let theta2 = augmented_state[1];
+    let dtheta1 = augmented_state[2];
+    let dtheta2 = augmented_state[3];
+
+    let theta2_cos = theta2.cos();
+    let sin_theta2 = theta2.sin();
+    let d1 =
+        M1 * square(LC1) + M2 * (square(L1) + square(LC2) + 2.0 * L1 * LC2 * theta2_cos) + I1 + I2;
+    let d2 = M2 * (square(LC2) + L1 * LC2 * theta2_cos) + I2;
+    let phi2 = M2 * LC2 * G * (theta1 + theta2 - PI / 2.0).cos();
+    let phi1 = -M2 * L1 * LC2 * square(dtheta2) * sin_theta2
+        - 2.0 * M2 * L1 * LC2 * dtheta2 * dtheta1 * sin_theta2
+        + (M1 * LC1 + M2 * L1) * G * (theta1 - PI / 2.0).cos()
+        + phi2;
+
+    let ddtheta2 = (a + d2 / d1 * phi1 - M2 * L1 * LC2 * square(dtheta1) * sin_theta2 - phi2)
+        / (M2 * square(LC2) + I2 - square(d2) / d1);
+    let ddtheta1 = -(d2 * ddtheta2 + phi1) / d1;
+
+    [dtheta1, dtheta2, ddtheta1, ddtheta2, 0.]
+}
+
+fn a_plus_by(a: [f32; 5], b: f32, y: [f32; 5]) -> [f32; 5] {
+    [
+        a[0] + b * y[0],
+        a[1] + b * y[1],
+        a[2] + b * y[2],
+        a[3] + b * y[3],
+        a[4] + b * y[4],
+    ]
+}
+
+fn vector_sum(x: [f32; 5], y: [f32; 5]) -> [f32; 5] {
+    [
+        x[0] + y[0],
+        x[1] + y[1],
+        x[2] + y[2],
+        x[3] + y[3],
+        x[4] + y[4],
+    ]
+}
+
+fn runge_kutta(y0: [f32; 5], t: [f32; 2]) -> [[f32; 5]; 2] {
+    let mut y_out = [[0.0; 5]; 2];
+    y_out[0] = y0;
+
+    let i = 0;
+
+    let thist = t[i];
+    let dt = t[i + 1] - thist;
+
+    let dt2 = dt / 2.0;
+
+    let k1 = state_derivative(y0);
+    let k2 = state_derivative(a_plus_by(y0, dt2, k1));
+    let k3 = state_derivative(a_plus_by(y0, dt2, k2));
+    let k4 = state_derivative(a_plus_by(y0, dt, k3));
+    //   Y_Out[I + 1] = Y0 + (dt / 6.0) * (K1 + 2 * K2 + 2 * K3 + K4);
+    y_out[i + 1] = a_plus_by(
+        y0,
+        dt / 6.0,
+        vector_sum(a_plus_by(k1, 2.0, k2), a_plus_by(k4, 2.0, k3)),
+    );
+
+    y_out
+}
+
+fn acrobot_individual_error(
+    team: &Team<AcrobotAction>,
+    fitness_cases: &[Vec<f32>],
+    params: &ProblemParameters,
+) -> f32 {
+    let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
+
+    let mut total_steps = 0;
+
+    let mut state = fitness_cases.to_owned();
+
+    let episode_limit = 500;
+
+    loop {
+        if state.is_empty() {
+            break;
+        }
+
+        let outputs = evaluate_team(team, &state, params);
+
+        let mut to_delete = vec![false; outputs.len()];
+
+        for (output_index, (current_state, output)) in state.iter_mut().zip(&outputs).enumerate() {
+            let torque = match output {
+                AcrobotAction::NegativeTorque => NEGATIVE_TORQUE,
+                AcrobotAction::DoNothing => 0.0,
+                AcrobotAction::PositiveTorque => POSITIVE_TORQUE,
+            };
+
+            let augmented_state = [
+                current_state[0],
+                current_state[1],
+                current_state[2],
+                current_state[3],
+                torque,
+            ];
+
+            let integrated = runge_kutta(augmented_state, [0.0, DT]);
+            let new_state = integrated[1];
+
+            current_state[0] = wrap(new_state[0], -PI, PI);
+            current_state[1] = wrap(new_state[1], -PI, PI);
+            current_state[2] = bound(new_state[2], -MAX_VEL_1, MAX_VEL_1);
+            current_state[3] = bound(new_state[3], -MAX_VEL_2, MAX_VEL_2);
+
+            let done =
+                (-current_state[0].cos() - (current_state[1] + current_state[0]).cos()) > 1.0;
+            if done || (steps[output_index] >= episode_limit) {
+                total_steps += steps[output_index];
+                to_delete[output_index] = true;
+            } else {
+                steps[output_index] += 1;
+            }
+        }
+
+        state = state
+            .into_iter()
+            .zip(to_delete)
+            .filter(|(_, delete)| !(*delete))
+            .map(|(s, _)| s)
+            .collect();
+    }
+
+    total_steps as f32
 }
 
 fn main() {
@@ -1947,7 +2010,7 @@ fn main() {
         p_change_action: 0.1,
         p_delete_program: 0.5,
         p_add_program: 0.5,
-        fitness_threshold: 45.0*(100.0) + 1.0,
+        fitness_threshold: 45.0 * (100.0) + 1.0,
         legal_functions: vec![
             Function::Relu,
             Function::Plus,
@@ -1966,11 +2029,9 @@ fn main() {
             Function::Greater,
             Function::Less,
             Function::IfThenElse,
-            Function::Copy
+            Function::Copy,
         ],
-        constant_list: vec![
-            0.0
-        ]
+        constant_list: vec![0.0],
     };
 
     for _ in 0..acrobot_parameters.fitness_case_count {
@@ -1979,7 +2040,10 @@ fn main() {
         let x2 = random_float_in_range(&mut rng, -0.1, 0.1);
         let v2 = random_float_in_range(&mut rng, -0.1, 0.1);
 
-        fitness_cases.push(fitness_case_with_constants(vec![x1, v1, x2, v2], &acrobot_parameters));
+        fitness_cases.push(fitness_case_with_constants(
+            vec![x1, v1, x2, v2],
+            &acrobot_parameters,
+        ));
     }
 
     for run in 1..=acrobot_parameters.run_count {
@@ -1989,7 +2053,7 @@ fn main() {
             &fitness_cases,
             &acrobot_parameters,
             acrobot_individual_error,
-             index_to_acrobot_action,
+            index_to_acrobot_action,
             &mut id_counter,
             dump,
             seed,
