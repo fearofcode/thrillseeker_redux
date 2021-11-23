@@ -1,6 +1,7 @@
 mod acrobot;
+mod wine_quality_classification;
 
-use crate::acrobot::AcrobotAction;
+// use crate::acrobot::AcrobotAction;
 use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
@@ -31,7 +32,6 @@ const MAX_ARITY: usize = 3;
 
 pub struct ProblemParameters {
     input_count: usize,
-    fitness_case_count: usize,
     register_count: usize,
     population_size: usize,
     population_to_delete: usize,
@@ -1538,20 +1538,21 @@ fn evaluate_teams<
 >(
     teams: &mut Vec<Team<A>>,
     fitness_cases: &[Vec<f32>],
-    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters) -> f32,
+    labels: &[A],
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> f32,
     params: &ProblemParameters,
 ) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
             // tracking skipped evaluations the way we do in c++ code is not very helpful now
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params));
+                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
             }
         });
     } else {
         for team in teams.iter_mut() {
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params));
+                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
             }
         }
     }
@@ -1563,8 +1564,9 @@ fn one_run<
     run: usize,
     rng: &mut Rng,
     fitness_cases: &[Vec<f32>],
+    labels: &[A],
     params: &ProblemParameters,
-    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters) -> f32,
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> f32,
     index_to_program_action: fn(usize) -> A,
     id_counter: &mut u64,
     dump: bool,
@@ -1585,7 +1587,7 @@ fn one_run<
 
     for generation in 1..=params.generation_count {
         println!("Starting generation {}", generation);
-        evaluate_teams(&mut teams, fitness_cases, individual_error, params);
+        evaluate_teams(&mut teams, fitness_cases, labels, individual_error, params);
 
         teams.sort_by(|team1, team2| {
             match team1
@@ -1740,7 +1742,9 @@ fn fitness_case_with_constants(inputs: Vec<f32>, params: &ProblemParameters) -> 
     output
 }
 
-fn print_best_teams(best_teams: Vec<Team<AcrobotAction>>) {
+fn print_best_teams<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(best_teams: Vec<Team<A>>) {
     println!("Best teams:");
 
     for best_team in best_teams.iter() {
@@ -1783,8 +1787,10 @@ fn setup() -> (u64, bool, Rng) {
 fn main() {
     let (seed, dump, mut rng) = setup();
 
-    let best_teams = acrobot::acrobot_runs(seed, dump, &mut rng);
+    // let best_teams = acrobot::acrobot_runs(seed, dump, &mut rng);
+    // print_best_teams(best_teams);
 
+    let best_teams = wine_quality_classification::wine_runs(seed, dump, &mut rng);
     print_best_teams(best_teams);
 
     println!("Ran with seed {}", seed);

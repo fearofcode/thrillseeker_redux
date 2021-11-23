@@ -150,6 +150,7 @@ pub fn acrobot_individual_error(
     team: &Team<AcrobotAction>,
     fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
+    _unused_labels: &[AcrobotAction],
 ) -> f32 {
     let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
 
@@ -221,7 +222,6 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
 
     let acrobot_parameters = ProblemParameters {
         input_count: 4,
-        fitness_case_count: 100,
         register_count: 4,
         population_size: 2000,
         population_to_delete: 1500,
@@ -269,7 +269,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
         constant_list: vec![0.0],
     };
 
-    for _ in 0..acrobot_parameters.fitness_case_count {
+    for _ in 0..100 {
         let x1 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
         let v1 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
         let x2 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
@@ -286,6 +286,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
             run,
             &mut rng,
             &fitness_cases,
+            &vec![],
             &acrobot_parameters,
             acrobot_individual_error,
             index_to_acrobot_action,
