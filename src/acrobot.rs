@@ -151,7 +151,7 @@ pub fn acrobot_individual_error(
     fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
     _unused_labels: &[AcrobotAction],
-) -> f32 {
+) -> (f32, Vec<AcrobotAction>) {
     let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
 
     let mut total_steps = 0;
@@ -160,12 +160,15 @@ pub fn acrobot_individual_error(
 
     let episode_limit = 500;
 
+    let mut actions = Vec::with_capacity(fitness_cases.len() * episode_limit);
+
     loop {
         if state.is_empty() {
             break;
         }
 
         let outputs = crate::evaluate_team(team, &state, params);
+        actions.append(&mut outputs.clone());
 
         let mut to_delete = vec![false; outputs.len()];
 
@@ -210,7 +213,7 @@ pub fn acrobot_individual_error(
             .collect();
     }
 
-    total_steps as f32
+    (total_steps as f32, actions)
 }
 
 pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<AcrobotAction>> {
@@ -224,6 +227,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
         input_count: 4,
         register_count: 4,
         population_size: 2000,
+        approximate_fitness_case_count: 100,
         population_to_delete: 1500,
         max_program_size: 32,
         min_initial_program_size: 1,
@@ -231,7 +235,6 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
         action_count: 3,
         max_initial_team_size: 6,
         max_team_size: 15,
-        tournament_size: 4,
         generation_count: 1000,
         generation_stagnation_limit: 50,
         run_count: 1,

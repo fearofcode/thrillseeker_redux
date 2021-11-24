@@ -71,7 +71,7 @@ pub fn wine_mean_absolute_deviance(
     fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
     labels: &[WineClassification],
-) -> f32 {
+) -> (f32, Vec<WineClassification>) {
     let state = fitness_cases.to_owned();
 
     let outputs = crate::evaluate_team(team, &state, params);
@@ -84,7 +84,7 @@ pub fn wine_mean_absolute_deviance(
         })
         .sum();
 
-    deviation_sum / (fitness_cases.len() as f32)
+    (deviation_sum / (fitness_cases.len() as f32), outputs)
 }
 
 pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClassification>> {
@@ -98,8 +98,9 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
     let wine_params = ProblemParameters {
         input_count: 11,
         register_count: 4,
-        population_size: 100000,
-        population_to_delete: 99000,
+        population_size: 5000,
+        population_to_delete: 3000,
+        approximate_fitness_case_count: 1599 + 4898,
         max_program_size: 64,
         min_initial_program_size: 1,
         max_initial_program_size: 16,
@@ -107,7 +108,6 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
         action_count: 7,
         max_initial_team_size: 6,
         max_team_size: 15,
-        tournament_size: 4,
         generation_count: 1000,
         generation_stagnation_limit: 10,
         run_count: 5,

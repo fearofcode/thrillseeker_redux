@@ -6,13 +6,14 @@ use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
+use std::iter::FromIterator;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn coin_flip(p: f32, rng: &mut Rng) -> bool {
@@ -33,6 +34,7 @@ const MAX_ARITY: usize = 3;
 pub struct ProblemParameters {
     input_count: usize,
     register_count: usize,
+    approximate_fitness_case_count: usize,
     population_size: usize,
     population_to_delete: usize,
     max_program_size: usize,
@@ -41,7 +43,6 @@ pub struct ProblemParameters {
     action_count: usize,
     max_initial_team_size: usize,
     max_team_size: usize,
-    tournament_size: usize,
     generation_count: usize,
     generation_stagnation_limit: usize,
     run_count: usize,
@@ -1211,6 +1212,7 @@ pub struct Team<
 > {
     programs: Vec<Program<A>>,
     fitness: Option<f32>,
+    behavior: Vec<A>,
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
@@ -1307,11 +1309,13 @@ fn initialize_teams<
         let mut team = Team {
             programs: vec![],
             fitness: None,
+            behavior: vec![],
             id: 0,
             parent1_id: 0,
             parent2_id: 0,
         };
         team.programs.reserve(params.max_team_size);
+        team.behavior.reserve(params.approximate_fitness_case_count);
 
         let program_count = rng.usize(..params.max_initial_team_size);
 
@@ -1424,32 +1428,6 @@ fn evaluate_team<
         .collect()
 }
 
-fn tournament_selection<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(
-    teams: &[Team<A>],
-    rng: &mut Rng,
-    params: &ProblemParameters,
-) -> usize {
-    (0..params.tournament_size)
-        .map(|_| rng.usize(..params.deletion_point()))
-        .max_by(|index1, index2| {
-            match teams[*index1]
-                .fitness
-                .unwrap()
-                .partial_cmp(&teams[*index2].fitness.unwrap())
-                .unwrap()
-            {
-                Ordering::Equal => teams[*index1]
-                    .active_instruction_count()
-                    .partial_cmp(&teams[*index2].active_instruction_count())
-                    .unwrap(),
-                other => other,
-            }
-        })
-        .unwrap()
-}
-
 fn mutate_team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
@@ -1539,25 +1517,35 @@ fn evaluate_teams<
     teams: &mut Vec<Team<A>>,
     fitness_cases: &[Vec<f32>],
     labels: &[A],
-    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> f32,
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> (f32, Vec<A>),
     params: &ProblemParameters,
 ) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
-            // tracking skipped evaluations the way we do in c++ code is not very helpful now
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
+                let (fitness, behavior) = individual_error(team, fitness_cases, params, labels);
+                team.fitness = Some(fitness);
+                team.behavior = behavior;
             }
         });
     } else {
         for team in teams.iter_mut() {
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
-            }
+                let (fitness, behavior) = individual_error(team, fitness_cases, params, labels);
+                team.fitness = Some(fitness);
+                team.behavior = behavior;            }
         }
     }
 }
 
+// time to change tactics.
+// create an archive of previously seen classification outputs.
+// delete any individuals whose output has already been seen.
+// if all individuals in the population have been seen, copy from the archive and fill the rest of
+// the population with offspring. allow free reproduction of all individuals without regard to fitness.
+// however, compute fitness and look for new bests as before to see what actually happens with fitness
+// when it is not selected for.
+// return the individual from the archive the best fitness, settling ties by lower instruction count.
 fn one_run<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
@@ -1566,7 +1554,7 @@ fn one_run<
     fitness_cases: &[Vec<f32>],
     labels: &[A],
     params: &ProblemParameters,
-    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> f32,
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> (f32, Vec<A>),
     index_to_program_action: fn(usize) -> A,
     id_counter: &mut u64,
     dump: bool,
@@ -1574,35 +1562,23 @@ fn one_run<
 ) -> Team<A> {
     println!("Starting run # {}", run);
 
-    println!("Initializing teams...");
-
     let mut teams = initialize_teams(rng, id_counter, params, index_to_program_action);
-    println!("Done.");
-
     let mut best_team = teams[0].clone();
-
     let mut optimal_team_found = false;
 
+    let mut archive = HashMap::new();
     let mut stagnation_count = 0;
 
     for generation in 1..=params.generation_count {
         println!("Starting generation {}", generation);
         evaluate_teams(&mut teams, fitness_cases, labels, individual_error, params);
 
-        teams.sort_by(|team1, team2| {
-            match team1
-                .fitness
-                .unwrap()
-                .partial_cmp(&team2.fitness.unwrap())
-                .unwrap()
-            {
-                Ordering::Equal => team1
-                    .active_instruction_count()
-                    .partial_cmp(&team2.active_instruction_count())
-                    .unwrap(),
-                other => other,
-            }
-        });
+        teams = teams.into_iter().filter(|team| !archive.contains_key(&team.behavior)).collect();
+
+        // all teams are novel, so insert them into the archive
+        for team in teams.iter() {
+            archive.insert(team.behavior.clone(), team.clone());
+        }
 
         if dump {
             fs::create_dir_all(format!("dump/{}", seed)).unwrap();
@@ -1614,11 +1590,8 @@ fn one_run<
             }
         }
 
-        let mut new_best_found = false;
-
         for team in teams.iter() {
             if best_team.fitness.is_none() || (team.fitness.unwrap() < best_team.fitness.unwrap()) {
-                new_best_found = true;
                 best_team = team.clone();
                 println!(
                     "New best found in run #{}, generation {}, with fitness {} and active instruction count {}:",
@@ -1647,36 +1620,50 @@ fn one_run<
             break;
         }
 
-        if new_best_found {
-            stagnation_count = 0;
-        } else {
+        if teams.is_empty() {
             stagnation_count += 1;
-            println!("Stagnation count has increased to {}", stagnation_count);
+
+            if stagnation_count > params.generation_stagnation_limit {
+                println!(
+                    "Stagnation count exceeds limit of {}, exiting",
+                    params.generation_stagnation_limit
+                );
+                break;
+            }
+        } else {
+            stagnation_count = 0;
         }
 
-        if stagnation_count > params.generation_stagnation_limit {
-            println!(
-                "Stagnation count exceeds limit of {}, exiting",
-                params.generation_stagnation_limit
-            );
-            break;
+        // keep breeding pool at a certain expected size
+        if teams.len() < params.deletion_point() {
+            let amount_to_copy = params.deletion_point() - teams.len();
+            // copy from the archive and try again
+            let archive_size = archive.len();
+            let mut potential_archive_key_indexes: Vec<usize> = (0..archive_size).collect();
+            rng.shuffle(&mut potential_archive_key_indexes);
+            let taken_indexes: Vec<usize> = potential_archive_key_indexes.into_iter().take(amount_to_copy).collect();
+            let chosen_archive_keys: HashSet<usize> = HashSet::from_iter(taken_indexes.into_iter());
+            // since we chose keys randomly, it doesn't matter if the hashmap is ordered internally or not
+            let archive_keys_to_copy: Vec<Vec<A>> = archive.keys().enumerate().filter(|(i, _k)|
+                chosen_archive_keys.contains(i)
+            ).map(|(_i, k)| k.to_vec()).collect();
+
+            for key in archive_keys_to_copy.iter() {
+                teams.push(archive.get(key).unwrap().clone());
+            }
         }
-
-        // TODO calculate and display min/max/median fitness
-
-        teams.truncate(params.deletion_point());
-        assert_eq!(teams.len(), params.deletion_point());
 
         while teams.len() < params.population_size {
             loop {
-                let parent1_index = tournament_selection(&teams, rng, params);
+                // all novel programs get to breed freely without regard to fitness
+                let parent1_index = rng.usize(..teams.len());
                 let mut parent1 = teams[parent1_index].clone();
 
                 let previous_team = parent1.clone();
 
                 parent1.restore_introns();
 
-                let parent2_index = tournament_selection(&teams, rng, params);
+                let parent2_index = rng.usize(..teams.len());
                 let mut parent2 = teams[parent2_index].clone();
 
                 parent2.restore_introns();
