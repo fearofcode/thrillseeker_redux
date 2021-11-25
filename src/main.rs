@@ -1538,14 +1538,6 @@ fn evaluate_teams<
     }
 }
 
-// time to change tactics.
-// create an archive of previously seen classification outputs.
-// delete any individuals whose output has already been seen.
-// if all individuals in the population have been seen, copy from the archive and fill the rest of
-// the population with offspring. allow free reproduction of all individuals without regard to fitness.
-// however, compute fitness and look for new bests as before to see what actually happens with fitness
-// when it is not selected for.
-// return the individual from the archive the best fitness, settling ties by lower instruction count.
 fn one_run<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
@@ -1569,17 +1561,32 @@ fn one_run<
     let mut archive = HashMap::new();
     let mut stagnation_count = 0;
 
+    // TODO investigate what's going on here. check the archive, see what kind of behavior is occurring.
+    // print stuff out and look it over.
+    // dump data and investigate the population.
+    // try acrobot and implement lawnmower/ant trail problems.
+    // don't lose sight of goal: forex with memory.
+    // try tweaking hyperparameters as well.
     for generation in 1..=params.generation_count {
         println!("Starting generation {}", generation);
         evaluate_teams(&mut teams, fitness_cases, labels, individual_error, params);
 
         teams = teams.into_iter().filter(|team| !archive.contains_key(&team.behavior)).collect();
 
+        println!("Inserting {} teams into the archive.", teams.len());
+
         // all teams are novel, so insert them into the archive
         for team in teams.iter() {
-            archive.insert(team.behavior.clone(), team.clone());
+            if !archive.contains_key(&team.behavior) {
+                archive.insert(team.behavior.clone(), team.clone());
+            }
         }
 
+        println!("Archive size is now {}.", archive.len());
+
+        for key in archive.keys() {
+            println!("key = {:?}", key);
+        }
         if dump {
             fs::create_dir_all(format!("dump/{}", seed)).unwrap();
             let output_path = format!("dump/{}/{}.txt", seed, generation);
@@ -1622,6 +1629,7 @@ fn one_run<
 
         if teams.is_empty() {
             stagnation_count += 1;
+            println!("Teams list is empty. Stagnation count now at {}.", stagnation_count);
 
             if stagnation_count > params.generation_stagnation_limit {
                 println!(
@@ -1637,6 +1645,7 @@ fn one_run<
         // keep breeding pool at a certain expected size
         if teams.len() < params.deletion_point() {
             let amount_to_copy = params.deletion_point() - teams.len();
+            println!("Have to copy {} values from the archive", amount_to_copy);
             // copy from the archive and try again
             let archive_size = archive.len();
             let mut potential_archive_key_indexes: Vec<usize> = (0..archive_size).collect();
@@ -1651,6 +1660,48 @@ fn one_run<
             for key in archive_keys_to_copy.iter() {
                 teams.push(archive.get(key).unwrap().clone());
             }
+        }
+
+        // Mutate existing teams in order to produce new behavior. Shuffle the population and mate
+        // in pairs.
+        rng.shuffle(&mut teams);
+
+        // Mutate existing population here. Slightly awkward since mutating each team requires a second
+        // team due to current definition of mutation
+        for i in (0..teams.len()-2) {
+            let mut parent1 = teams[i].clone();
+            let original_parent1 = parent1.clone();
+
+            let mut parent2 = teams[i+1].clone();
+            parent1.restore_introns();
+            parent2.restore_introns();
+
+            if parent1.programs.len() <= parent2.programs.len() {
+                team_crossover(&mut parent1, &mut parent2, rng, params);
+            } else {
+                team_crossover(&mut parent2, &mut parent1, rng, params);
+                parent1 = parent2.clone();
+            }
+
+            // mutate until team has an effective change
+            loop {
+                mutate_team(
+                    &mut parent1,
+                    &mut parent2,
+                    rng,
+                    id_counter,
+                    params,
+                    index_to_program_action,
+                );
+                parent1.mark_introns(params);
+
+                if parent1 != original_parent1 {
+                    break;
+                }
+            }
+
+            parent1.fitness = None;
+            teams[i] = parent1.clone();
         }
 
         while teams.len() < params.population_size {
@@ -1774,11 +1825,11 @@ fn setup() -> (u64, bool, Rng) {
 fn main() {
     let (seed, dump, mut rng) = setup();
 
-    // let best_teams = acrobot::acrobot_runs(seed, dump, &mut rng);
-    // print_best_teams(best_teams);
-
-    let best_teams = wine_quality_classification::wine_runs(seed, dump, &mut rng);
+    let best_teams = acrobot::acrobot_runs(seed, dump, &mut rng);
     print_best_teams(best_teams);
+
+    // let best_teams = wine_quality_classification::wine_runs(seed, dump, &mut rng);
+    // print_best_teams(best_teams);
 
     println!("Ran with seed {}", seed);
 }

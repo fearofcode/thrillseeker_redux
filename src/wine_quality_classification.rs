@@ -110,7 +110,7 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
         max_team_size: 15,
         generation_count: 1000,
         generation_stagnation_limit: 10,
-        run_count: 5,
+        run_count: 1,
         p_delete_instruction: 0.7,
         p_add_instruction: 0.7,
         p_swap_instructions: 0.7,

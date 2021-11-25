@@ -223,11 +223,13 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
 
     let mut fitness_cases: Vec<Vec<f32>> = vec![];
 
+    let fitness_case_count = 5;
+
     let acrobot_parameters = ProblemParameters {
         input_count: 4,
         register_count: 4,
         population_size: 2000,
-        approximate_fitness_case_count: 100,
+        approximate_fitness_case_count: fitness_case_count,
         population_to_delete: 1500,
         max_program_size: 32,
         min_initial_program_size: 1,
@@ -248,7 +250,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
         p_change_action: 0.1,
         p_delete_program: 0.5,
         p_add_program: 0.5,
-        fitness_threshold: 45.0 * (100.0) + 1.0,
+        fitness_threshold: 45.0 * (fitness_case_count as f32) + 1.0,
         legal_functions: vec![
             Function::Relu,
             Function::Plus,
@@ -272,7 +274,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
         constant_list: vec![0.0],
     };
 
-    for _ in 0..100 {
+    for _ in 0..fitness_case_count {
         let x1 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
         let v1 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
         let x2 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
