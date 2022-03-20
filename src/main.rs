@@ -1,3 +1,4 @@
+mod lsh;
 mod acrobot;
 mod wine_quality_classification;
 
@@ -1211,6 +1212,7 @@ pub struct Team<
 > {
     programs: Vec<Program<A>>,
     fitness: Option<f32>,
+    descriptor: Option<String>,
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
@@ -1585,6 +1587,9 @@ fn one_run<
 
     let mut stagnation_count = 0;
 
+    let mut full_archive = vec![];
+    let mut descriptor_archive = vec![];
+
     for generation in 1..=params.generation_count {
         println!("Starting generation {}", generation);
         evaluate_teams(&mut teams, fitness_cases, labels, individual_error, params);
@@ -1709,6 +1714,8 @@ fn one_run<
                     parent1.fitness = None;
                     // only add new individuals
                     teams.push(parent1);
+                    full_archive.push(parent1.clone());
+                    descriptor_archive.push(parent1.descriptor.clone());
                     break;
                 }
             }
