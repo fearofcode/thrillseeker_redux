@@ -1559,6 +1559,8 @@ fn tournament_selection<
         .unwrap()
 }
 
+const max_mutation_crossover_attempts: usize = 5;
+
 fn mutate_team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
@@ -1571,16 +1573,35 @@ fn mutate_team<
 ) {
     let team_actions: Vec<_> = team.programs.iter().map(|p| p.action).collect();
 
-    for program in team.programs.iter_mut() {
-        mutate_program(
-            program,
-            &team_actions,
-            rng,
-            counter,
-            params,
-            index_to_program_action,
-        );
-    }
+    // prevent mutations that create empty programs
+    team.programs = team.programs.iter_mut().map(|program| {
+        let original_program = program.clone();
+        let mut mutated_program = original_program.clone();
+
+        let mut retry_count = 0;
+
+        loop {
+            mutate_program(
+                &mut mutated_program,
+                &team_actions,
+                rng,
+                counter,
+                params,
+                index_to_program_action,
+            );
+            mutated_program.mark_introns(params);
+            if !mutated_program.active_instructions.is_empty() {
+                break;
+            }
+            mutated_program = original_program.clone();
+            retry_count += 1;
+            // if a program can't possibly be mutated without creating an empty program, give up
+            if retry_count > max_mutation_crossover_attempts {
+                break;
+            }
+        }
+        mutated_program
+    }).collect();
 
     if team.programs.len() < params.max_team_size && coin_flip(params.p_add_program, rng) {
         let other_team_index = rng.usize(..other_team.programs.len());
@@ -1625,21 +1646,39 @@ fn team_crossover<
 
     let used_team2_ids: HashSet<u64> = HashSet::new();
 
-    for team1_program in team1.programs.iter_mut() {
-        let team1_action = team1_program.action;
+    // avoid doing crossover that would result in empty programs
+    team1.programs = team1.programs.iter().map(|program| {
+        let team1_action = program.action;
 
         for team2_program in team2.programs.iter_mut() {
             let team2_action = team2_program.action;
             if team1_action == team2_action && !used_team2_ids.contains(&team2.id) {
-                size_fair_dependent_instruction_crossover(
-                    team1_program,
-                    team2_program,
-                    rng,
-                    params,
-                );
+                let original_program = program.clone();
+                let mut retry_count = 0;
+                loop {
+                    let mut crossed_over_program = original_program.clone();
+                    size_fair_dependent_instruction_crossover(
+                        &mut crossed_over_program,
+                        team2_program,
+                        rng,
+                        params,
+                    );
+                    crossed_over_program.mark_introns(params);
+
+                    if !crossed_over_program.active_instructions.is_empty() {
+                        return crossed_over_program;
+                    }
+                    retry_count += 1;
+                    if retry_count > max_mutation_crossover_attempts {
+                        return program.clone()
+                    }
+                }
+
             }
         }
-    }
+        // if we can't find a viable crossover point, just return the original program
+        program.clone()
+    }).collect();
 }
 
 fn evaluate_teams<
@@ -1900,11 +1939,11 @@ fn setup() -> (u64, bool, Rng) {
 fn main() {
     let (seed, dump, mut rng) = setup();
 
-    let (best_teams, params) = acrobot::acrobot_runs(seed, dump, &mut rng);
-    print_best_teams(best_teams, &params);
-
-    // let (best_teams, params) = wine_quality_classification::wine_runs(seed, dump, &mut rng);
+    // let (best_teams, params) = acrobot::acrobot_runs(seed, dump, &mut rng);
     // print_best_teams(best_teams, &params);
+
+    let (best_teams, params) = wine_quality_classification::wine_runs(seed, dump, &mut rng);
+    print_best_teams(best_teams, &params);
 
     println!("Ran with seed {}", seed);
 }

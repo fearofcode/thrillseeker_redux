@@ -109,7 +109,7 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<WineClas
         max_team_size: 15,
         tournament_size: 4,
         generation_count: 1000,
-        generation_stagnation_limit: 10,
+        generation_stagnation_limit: 25,
         run_count: 1,
         p_delete_instruction: 0.7,
         p_add_instruction: 0.7,
@@ -143,12 +143,13 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<WineClas
             Function::IfThenElse,
             // Function::Copy,
         ],
-        constant_list: vec![
-            0.0, 1.0,  2.0,  3.0,  4.0,  5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
-                -1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0, -8.0, -9.0, -10.0,
-             0.1,  0.2,  0.3,  0.4,  0.5,
-            -0.1, -0.2, -0.3, -0.4, -0.5,
-        ],
+        // constant_list: vec![
+        //     0.0, 1.0,  2.0,  3.0,  4.0,  5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
+        //         -1.0, -2.0, -3.0, -4.0, -5.0, -6.0, -7.0, -8.0, -9.0, -10.0,
+        //      0.1,  0.2,  0.3,  0.4,  0.5,
+        //     -0.1, -0.2, -0.3, -0.4, -0.5,
+        // ],
+        constant_list: vec![],
         feature_names: vec!["fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar",
                             "chlorides", "free_sulfur_dioxide", "total_sulfur_dioxide", "density",
                             "pH", "sulphates", "alcohol"]
