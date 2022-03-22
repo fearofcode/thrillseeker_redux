@@ -58,6 +58,7 @@ pub struct ProblemParameters {
     fitness_threshold: f32,
     legal_functions: Vec<Function>,
     constant_list: Vec<f32>,
+    feature_names: Vec<&'static str>
 }
 
 impl ProblemParameters {
@@ -170,6 +171,78 @@ struct Instruction {
     is_register: [bool; MAX_ARITY],
     op: Function,
     index: usize,
+}
+
+impl Instruction {
+    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+        print!("\t\tr[{}] = ", self.destination);
+
+        let arity = function_arity(&self.op);
+        let is_register0 = self.is_register[0];
+        let register0_string = format!("r[{}]", self.operands[0]);
+        let register1_string = format!("r[{}]", self.operands[1]);
+
+        let register0_str = if is_register0 { register0_string.as_str() } else {
+            let op = self.operands[0];
+            if op < feature_names.len() {
+                feature_names[op]
+            } else {
+                constants[op-feature_names.len()]
+            }
+        };
+        let is_register1 = self.is_register[1];
+        let register1_str = if is_register1 { register1_string.as_str() } else {
+            let op = self.operands[1];
+            if op < feature_names.len() {
+                feature_names[op]
+            } else {
+                constants[op-feature_names.len()]
+            }
+        };
+
+        if arity == 1 {
+            print!("{}", self.op);
+            if !infix_op(&self.op) {
+                print!("(");
+            }
+            print!("{}", register0_str);
+            if !infix_op(&self.op) {
+                println!(");");
+            } else {
+                println!(";");
+            }
+        } else if arity == 2 {
+            if infix_op(&self.op) {
+                println!("{} {} {};", register0_str, self.op, register1_str)
+            } else {
+                println!(
+                    "{}({}, {});",
+                    self.op, register0_str, register1_str
+                );
+            }
+        } else {
+            print!("{}(", self.op);
+            for i in 0..arity {
+                if self.is_register[i] {
+                    print!("r[{}]", self.operands[i]);
+                } else {
+                    let register_str = {
+                        let op = self.operands[i];
+                        if op < feature_names.len() {
+                            feature_names[op]
+                        } else {
+                            constants[op-feature_names.len()]
+                        }
+                    };
+                    print!("{}", register_str);
+                }
+                if i != (arity - 1) {
+                    print!(", ");
+                }
+            }
+            println!(");");
+        }
+    }
 }
 
 impl fmt::Display for Instruction {
@@ -349,6 +422,19 @@ impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Program<A>
 {
+    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+        println!("\t\tAction: {}", self.action);
+        println!("\t\tID #: {}", self.id);
+
+        if self.active_instructions.is_empty() {
+            println!("\t\t(Empty program)");
+        } else {
+            for instruction in self.active_instructions.iter() {
+                instruction.print_readable_features(feature_names, constants);
+            }
+        }
+    }
+    
     fn restore_introns(&mut self) {
         for intron in self.introns.iter() {
             if intron.index > self.active_instructions.len() {
@@ -1220,6 +1306,29 @@ impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Team<A>
 {
+    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+        println!("Team ID #{}", self.id);
+
+        if self.parent1_id != 0 {
+            println!("Team Parent #1: {}", self.parent1_id);
+        } else {
+            println!("Team Parent #1: None");
+        }
+
+        if self.parent2_id != 0 {
+            println!("Team Parent #2: {}", self.parent2_id);
+        } else {
+            println!("Team Parent #2: None");
+        }
+
+        for (team_index, program) in self.programs.iter().enumerate() {
+            println!("\tProgram #{}", team_index + 1);
+            (*program).print_readable_features(feature_names, constants);
+        }
+
+        println!();
+    }
+    
     fn restore_introns(&mut self) {
         for program in self.programs.iter_mut() {
             program.restore_introns();
@@ -1744,12 +1853,16 @@ fn fitness_case_with_constants(inputs: Vec<f32>, params: &ProblemParameters) -> 
 
 fn print_best_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(best_teams: Vec<Team<A>>) {
+>(best_teams: Vec<Team<A>>, params: &ProblemParameters) {
     println!("Best teams:");
+
+    let constant_strings: Vec<String> = params.constant_list.iter().map(|c| c.to_string())
+        .collect();
+    let constant_strs: Vec<&str> = constant_strings.iter().map(|c| c.as_str()).collect();
 
     for best_team in best_teams.iter() {
         println!("Fitness {}:", best_team.fitness.unwrap());
-        println!("{}\n", best_team);
+        best_team.print_readable_features(&params.feature_names, &constant_strs);
     }
 }
 
@@ -1787,11 +1900,11 @@ fn setup() -> (u64, bool, Rng) {
 fn main() {
     let (seed, dump, mut rng) = setup();
 
-    // let best_teams = acrobot::acrobot_runs(seed, dump, &mut rng);
-    // print_best_teams(best_teams);
+    let (best_teams, params) = acrobot::acrobot_runs(seed, dump, &mut rng);
+    print_best_teams(best_teams, &params);
 
-    let best_teams = wine_quality_classification::wine_runs(seed, dump, &mut rng);
-    print_best_teams(best_teams);
+    // let (best_teams, params) = wine_quality_classification::wine_runs(seed, dump, &mut rng);
+    // print_best_teams(best_teams, &params);
 
     println!("Ran with seed {}", seed);
 }

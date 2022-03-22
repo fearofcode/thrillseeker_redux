@@ -87,7 +87,7 @@ pub fn wine_mean_absolute_deviance(
     deviation_sum / (fitness_cases.len() as f32)
 }
 
-pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClassification>> {
+pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<WineClassification>>, ProblemParameters) {
     let mut id_counter: u64 = 1;
 
     let mut best_teams: Vec<Team<WineClassification>> = vec![];
@@ -98,8 +98,8 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
     let wine_params = ProblemParameters {
         input_count: 11,
         register_count: 4,
-        population_size: 100000,
-        population_to_delete: 99000,
+        population_size: 2000,
+        population_to_delete: 1500,
         max_program_size: 64,
         min_initial_program_size: 1,
         max_initial_program_size: 16,
@@ -110,7 +110,7 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
         tournament_size: 4,
         generation_count: 1000,
         generation_stagnation_limit: 10,
-        run_count: 5,
+        run_count: 1,
         p_delete_instruction: 0.7,
         p_add_instruction: 0.7,
         p_swap_instructions: 0.7,
@@ -124,20 +124,20 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
         // better than SVM
         fitness_threshold: 0.45,
         legal_functions: vec![
-            Function::Relu,
+            // Function::Relu,
             Function::Plus,
             Function::Minus,
             Function::Times,
             Function::Divide,
-            Function::Square,
-            Function::Sin,
-            Function::Log,
+            // Function::Square,
+            // Function::Sin,
+            // Function::Log,
             Function::And,
             Function::Or,
             Function::Not,
             Function::Xor,
-            Function::Min,
-            Function::Max,
+            // Function::Min,
+            // Function::Max,
             Function::Greater,
             Function::Less,
             Function::IfThenElse,
@@ -149,6 +149,9 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
              0.1,  0.2,  0.3,  0.4,  0.5,
             -0.1, -0.2, -0.3, -0.4, -0.5,
         ],
+        feature_names: vec!["fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar",
+                            "chlorides", "free_sulfur_dioxide", "total_sulfur_dioxide", "density",
+                            "pH", "sulphates", "alcohol"]
     };
 
     let mut rdr = csv::ReaderBuilder::new()
@@ -191,5 +194,5 @@ pub fn wine_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<WineClass
             seed,
         ));
     }
-    best_teams
+    (best_teams, wine_params)
 }

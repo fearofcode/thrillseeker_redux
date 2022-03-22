@@ -1,0 +1,15 @@
+- change data layout so that fitness_cases[register_index][operand1] can become fitness_cases[operand1][register_index]. compare time before and after
+
+- make it so that programs can never be effectively empty after mutation/crossover and are never effectively empty on initialization.
+also make it so that every team has to have at least one of each learner if not done already
+
+- get basic version of ant trail problem working but with enhanced actions so that it can see and move in any of 8 directions
+- run the program with dump = true and spend time looking at the data
+
+- then do the sme thing again
+- add any missing dump features
+
+- add indexed memory
+- add in novelty search
+
+forex

@@ -213,7 +213,7 @@ pub fn acrobot_individual_error(
     total_steps as f32
 }
 
-pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<AcrobotAction>> {
+pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<AcrobotAction>>, ProblemParameters) {
     let mut id_counter: u64 = 1;
 
     let mut best_teams: Vec<Team<AcrobotAction>> = vec![];
@@ -223,8 +223,8 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
     let acrobot_parameters = ProblemParameters {
         input_count: 4,
         register_count: 4,
-        population_size: 2000,
-        population_to_delete: 1500,
+        population_size: 5000,
+        population_to_delete: 4500,
         max_program_size: 32,
         min_initial_program_size: 1,
         max_initial_program_size: 8,
@@ -233,7 +233,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
         max_team_size: 15,
         tournament_size: 4,
         generation_count: 1000,
-        generation_stagnation_limit: 50,
+        generation_stagnation_limit: 10,
         run_count: 1,
         p_delete_instruction: 0.7,
         p_add_instruction: 0.7,
@@ -267,6 +267,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
             Function::Copy,
         ],
         constant_list: vec![0.0],
+        feature_names: vec!["x1", "v1", "x2", "v2"]
     };
 
     for _ in 0..100 {
@@ -295,5 +296,5 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> Vec<Team<Acrobo
             seed,
         ));
     }
-    best_teams
+    (best_teams, acrobot_parameters)
 }
