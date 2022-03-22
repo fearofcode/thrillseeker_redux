@@ -1,11 +1,22 @@
-- get basic version of ant trail problem working but with enhanced actions so that it can see and move in any of 8 directions
+- get basic version of ant trail problem working but with enhanced actions so that it can see
+ move in any of 8 directions
+
 - run the program with dump = true and spend time looking at the data
 
 - then do the sme thing again
 - add any missing dump features
 
-- add indexed memory
-- add in novelty search
+- get indexed memory working on trivial memory problems, then use memory on ant trail
+
+i.e.:
+
+- give it a random sequence of integers and ask it to recall the previous value
+- ask it to compute a running sum
+- ask it to detect if a sum is increasing, decreasing, or neither
+
+- add in LSH novelty search
+
+- do trivial synthetic time series. make it gradually more complex
 
 forex
 

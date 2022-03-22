@@ -1,7 +1,7 @@
+mod ant_trail;
 mod acrobot;
 mod wine_quality_classification;
 
-// use crate::acrobot::AcrobotAction;
 use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
