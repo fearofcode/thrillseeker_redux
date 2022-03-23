@@ -174,7 +174,7 @@ struct Instruction {
 }
 
 impl Instruction {
-    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+    fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         print!("\t\tr[{}] = ", self.destination);
 
         let arity = function_arity(&self.op);
@@ -422,7 +422,7 @@ impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Program<A>
 {
-    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+    fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         println!("\t\tAction: {}", self.action);
         println!("\t\tID #: {}", self.id);
 
@@ -1306,7 +1306,7 @@ impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Team<A>
 {
-    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+    fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         println!("Team ID #{}", self.id);
 
         if self.parent1_id != 0 {

@@ -73,7 +73,7 @@ pub fn ant_trail_individual_error(
             if grid.is_food_in_direction(pos, Direction::UpLeft) { 1.0 } else { 0.0 },
             if grid.is_food_in_direction(pos, Direction::DownLeft) { 1.0 } else { 0.0 }
         ];
-        let outputs = crate::evaluate_team(team, &vec![state], params);
+        let outputs = crate::evaluate_team(team, &[state], params);
         let output = outputs[0];
         match output {
             AntTrailAction::Up => {
@@ -177,9 +177,9 @@ pub fn ant_trail_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<Ant
     for run in 1..=ant_trail_parameters.run_count {
         best_teams.push(crate::one_run(
             run,
-            &mut rng,
-            &vec![],
-            &vec![],
+            rng,
+            &[],
+            &[],
             &ant_trail_parameters,
             ant_trail_individual_error,
             index_to_ant_trail_action,
