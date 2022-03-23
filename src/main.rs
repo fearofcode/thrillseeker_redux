@@ -1,7 +1,7 @@
+mod ant_trail;
+mod ant_trail_problem;
 mod acrobot;
-mod wine_quality_classification;
 
-// use crate::acrobot::AcrobotAction;
 use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
@@ -174,7 +174,7 @@ struct Instruction {
 }
 
 impl Instruction {
-    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+    fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         print!("\t\tr[{}] = ", self.destination);
 
         let arity = function_arity(&self.op);
@@ -422,7 +422,7 @@ impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Program<A>
 {
-    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+    fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         println!("\t\tAction: {}", self.action);
         println!("\t\tID #: {}", self.id);
 
@@ -1306,7 +1306,7 @@ impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Team<A>
 {
-    fn print_readable_features(&self, feature_names: &Vec<&'static str>, constants: &Vec<&str>) {
+    fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         println!("Team ID #{}", self.id);
 
         if self.parent1_id != 0 {
@@ -1559,7 +1559,7 @@ fn tournament_selection<
         .unwrap()
 }
 
-const max_mutation_crossover_attempts: usize = 5;
+const MAX_MUTATION_CROSSOVER_ATTEMPTS: usize = 5;
 
 fn mutate_team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
@@ -1596,7 +1596,7 @@ fn mutate_team<
             mutated_program = original_program.clone();
             retry_count += 1;
             // if a program can't possibly be mutated without creating an empty program, give up
-            if retry_count > max_mutation_crossover_attempts {
+            if retry_count > MAX_MUTATION_CROSSOVER_ATTEMPTS {
                 break;
             }
         }
@@ -1669,7 +1669,7 @@ fn team_crossover<
                         return crossed_over_program;
                     }
                     retry_count += 1;
-                    if retry_count > max_mutation_crossover_attempts {
+                    if retry_count > MAX_MUTATION_CROSSOVER_ATTEMPTS {
                         return program.clone()
                     }
                 }
@@ -1778,7 +1778,7 @@ fn one_run<
                 println!("{}", team);
             }
 
-            if team.fitness.unwrap() < params.fitness_threshold {
+            if team.fitness.unwrap() <= params.fitness_threshold {
                 optimal_team_found = true;
                 println!(
                     "Optimal found in run #{}, generation {}, with fitness {}:",
@@ -1942,7 +1942,7 @@ fn main() {
     // let (best_teams, params) = acrobot::acrobot_runs(seed, dump, &mut rng);
     // print_best_teams(best_teams, &params);
 
-    let (best_teams, params) = wine_quality_classification::wine_runs(seed, dump, &mut rng);
+    let (best_teams, params) = ant_trail_problem::ant_trail_runs(seed, dump, &mut rng);
     print_best_teams(best_teams, &params);
 
     println!("Ran with seed {}", seed);

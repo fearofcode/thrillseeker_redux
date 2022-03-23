@@ -1,11 +1,29 @@
-- get basic version of ant trail problem working but with enhanced actions so that it can see and move in any of 8 directions
+- add code to serialize champion solution to disk so it can be read back easily. add a version
+field to quickly detect if semantics of code have changed since serialization occurred and auto-reject
+if so. this could save us fucking money later, do it.
+
+- it looks like this version of ant trail is too easy.
+seed 1648011916547 finds a perfect solution. add visualization code to see output from champion
+solution using serialization above
+
+- after seeing optimal solution run, decide whether to make the problem easier or not
+
 - run the program with dump = true and spend time looking at the data
 
 - then do the sme thing again
 - add any missing dump features
 
-- add indexed memory
-- add in novelty search
+- get indexed memory working on trivial memory problems, then use memory on ant trail
+
+i.e.:
+
+- give it a random sequence of integers and ask it to recall the previous value
+- ask it to compute a running sum
+- ask it to detect if a sum is increasing, decreasing, or neither
+
+- add in LSH novelty search
+
+- do trivial synthetic time series. make it gradually more complex
 
 forex
 

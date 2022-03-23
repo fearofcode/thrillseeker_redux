@@ -271,10 +271,10 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<Acrob
     };
 
     for _ in 0..100 {
-        let x1 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
-        let v1 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
-        let x2 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
-        let v2 = crate::random_float_in_range(&mut rng, -0.1, 0.1);
+        let x1 = crate::random_float_in_range(rng, -0.1, 0.1);
+        let v1 = crate::random_float_in_range(rng, -0.1, 0.1);
+        let x2 = crate::random_float_in_range(rng, -0.1, 0.1);
+        let v2 = crate::random_float_in_range(rng, -0.1, 0.1);
 
         fitness_cases.push(crate::fitness_case_with_constants(
             vec![x1, v1, x2, v2],
@@ -285,9 +285,9 @@ pub fn acrobot_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<Acrob
     for run in 1..=acrobot_parameters.run_count {
         best_teams.push(crate::one_run(
             run,
-            &mut rng,
+            rng,
             &fitness_cases,
-            &vec![],
+            &[],
             &acrobot_parameters,
             acrobot_individual_error,
             index_to_acrobot_action,
