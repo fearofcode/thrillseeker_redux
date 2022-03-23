@@ -35,9 +35,9 @@ static SANTA_FE_ANT_TRAIL: &str =
 ................................";
 
 // number of #'s above. we can terminate if this score is achieved
-pub const SANTA_FE_PERFECT_SCORE: u8 = 89;
+pub const SANTA_FE_PERFECT_SCORE: usize = 89;
 
-pub const MAXIMUM_MOVEMENTS: u32 = 1000;
+pub const MAXIMUM_MOVEMENTS: usize = GRID_SIZE_USIZE*GRID_SIZE_USIZE;
 
 
 // assume every grid is this size
@@ -100,8 +100,8 @@ impl Grid {
     }
 
     pub fn draw_with_position(&self, pos: WorldPosition) {
-        let pos_row = pos.x as usize;
-        let pos_col = pos.y as usize;
+        let pos_row = pos.y as usize;
+        let pos_col = pos.x as usize;
 
         for (row_idx, row) in self.grid.iter().enumerate() {
             for (col_idx, col) in row.iter().enumerate() {
@@ -119,15 +119,15 @@ impl Grid {
     }
 
     pub fn food_at_position(&self, pos: WorldPosition) -> bool {
-        self.grid[pos.x as usize][pos.y as usize]
+        self.grid[pos.y as usize][pos.x as usize]
     }
 
     pub fn remove_food_at_position(&mut self, pos: WorldPosition) {
-        self.grid[pos.x as usize][pos.y as usize] = false;
+        self.grid[pos.y as usize][pos.x as usize] = false;
     }
 
-    pub fn is_food_ahead(&self, pos: WorldPosition) -> bool {
-        let next_pos = pos.position_ahead();
+    pub fn is_food_in_direction(&self, pos: WorldPosition, direction: Direction) -> bool {
+        let next_pos = pos.position_ahead(direction);
         self.food_at_position(next_pos)
     }
 }
@@ -165,8 +165,8 @@ impl WorldPosition {
         }
     }
 
-    pub fn position_ahead(self) -> WorldPosition {
-        let mut new_x = self.x + match self.facing {
+    pub fn position_ahead(self, dir: Direction) -> WorldPosition {
+        let mut new_x = self.x + match dir {
             Direction::Down => 0,
             Direction::Left => -1,
             Direction::Right => 1,
@@ -184,7 +184,7 @@ impl WorldPosition {
             new_x -= GRID_SIZE;
         }
 
-        let mut new_y = self.y + match self.facing {
+        let mut new_y = self.y + match dir {
             Direction::Down => 1,
             Direction::Left => 0,
             Direction::Right => 0,
@@ -205,72 +205,6 @@ impl WorldPosition {
     }
 
     pub fn one_move(&mut self) {
-        *self = self.position_ahead()
+        *self = self.position_ahead(self.facing)
     }
-
-    pub fn move_in_direction(&mut self, dir: Direction) {
-        self.facing = dir;
-        self.one_move();
-    }
-}
-
-
-#[test]
-fn test_toroidal_movement() {
-    let mut pos = WorldPosition::new();
-    pos.one_move();
-
-    assert_eq!(pos.x, 0);
-    assert_eq!(pos.y, 1);
-
-    pos.move_in_direction(Direction::Left);
-
-    assert_eq!(pos.x, 0);
-    assert_eq!(pos.y, 0);
-
-    /* at top left, move one left */
-    pos.one_move();
-
-    /* goes over to top right */
-    assert_eq!(pos.x, 0);
-    assert_eq!(pos.y, GRID_SIZE-1);
-
-    pos.facing = Direction::Up;
-
-    /* facing up, goes up. ends at bottom right */
-    pos.one_move();
-
-    assert_eq!(pos.x, GRID_SIZE-1);
-    assert_eq!(pos.y, GRID_SIZE-1);
-
-    pos.facing = Direction::Right;
-
-    pos.one_move();
-
-    /* facing right, goes right. ends at lower left */
-    assert_eq!(pos.x, GRID_SIZE-1);
-    assert_eq!(pos.y, 0);
-}
-
-#[test]
-fn test_turning_and_moving() {
-    let standard_trail = Grid::santa_fe_trail();
-    let mut pos = WorldPosition::new();
-    while standard_trail.is_food_ahead(pos) {
-        pos.one_move();
-    }
-
-    assert_eq!(pos.x, 0);
-    assert_eq!(pos.y, 3);
-
-    pos.move_in_direction(Direction::Right);
-
-    assert_eq!(pos.facing, Direction::Down);
-
-    while standard_trail.is_food_ahead(pos) {
-        pos.one_move();
-    }
-
-    assert_eq!(pos.x, 5);
-    assert_eq!(pos.y, 3);
 }

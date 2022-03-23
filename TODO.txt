@@ -1,5 +1,10 @@
-- get basic version of ant trail problem working but with enhanced actions so that it can see
- move in any of 8 directions
+- add code to serialize champion solution to disk so it can be read back easily
+
+- it looks like this version of ant trail is too easy.
+seed 1648011916547 finds a perfect solution. add visualization code to see output from champion
+solution
+
+- after seeing optimal solution run, decide whether to make the problem easier or not
 
 - run the program with dump = true and spend time looking at the data
 
