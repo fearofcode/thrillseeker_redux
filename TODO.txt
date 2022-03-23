@@ -1,10 +1,6 @@
-- add code to serialize champion solution to disk so it can be read back easily. add a version
-field to quickly detect if semantics of code have changed since serialization occurred and auto-reject
-if so. this could save us fucking money later, do it.
-
 - it looks like this version of ant trail is too easy.
 seed 1648011916547 finds a perfect solution. add visualization code to see output from champion
-solution using serialization above
+solution using serialization above. make this a separate executable from model generation
 
 - after seeing optimal solution run, decide whether to make the problem easier or not
 

@@ -5,6 +5,7 @@ mod acrobot;
 use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
+use serde::{Serialize, Deserialize};
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt;
@@ -22,6 +23,9 @@ fn coin_flip(p: f32, rng: &mut Rng) -> bool {
 fn random_float_in_range(rng: &mut Rng, lower: f32, upper: f32) -> f32 {
     lower + (upper - lower) * rng.f32()
 }
+
+// increment this when changes thta would invalidate serialized teams occur
+const THRILLSEEKER_VERSION: usize = 1;
 
 const EVALUATE_PARALLEL: bool = true;
 
@@ -71,7 +75,7 @@ impl ProblemParameters {
     }
 }
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 enum Function {
     Relu,
     Plus,
@@ -164,7 +168,7 @@ fn infix_op(f: &Function) -> bool {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 struct Instruction {
     destination: usize,
     operands: [usize; MAX_ARITY],
@@ -408,7 +412,7 @@ fn active_instructions_from_index(
     active_instructions
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Program<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 > {
@@ -1291,7 +1295,7 @@ fn mutate_program<
     program.id = *counter;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 > {
@@ -1300,6 +1304,7 @@ pub struct Team<
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
+    version: usize,
 }
 
 impl<
@@ -1419,6 +1424,7 @@ fn initialize_teams<
             id: 0,
             parent1_id: 0,
             parent2_id: 0,
+            version: THRILLSEEKER_VERSION
         };
         team.programs.reserve(params.max_team_size);
 
@@ -1892,7 +1898,7 @@ fn fitness_case_with_constants(inputs: Vec<f32>, params: &ProblemParameters) -> 
 
 fn print_best_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(best_teams: Vec<Team<A>>, params: &ProblemParameters) {
+>(best_teams: &Vec<Team<A>>, params: &ProblemParameters) {
     println!("Best teams:");
 
     let constant_strings: Vec<String> = params.constant_list.iter().map(|c| c.to_string())
@@ -1943,7 +1949,21 @@ fn main() {
     // print_best_teams(best_teams, &params);
 
     let (best_teams, params) = ant_trail_problem::ant_trail_runs(seed, dump, &mut rng);
-    print_best_teams(best_teams, &params);
+    print_best_teams(&best_teams, &params);
+
+    // we can always run this since it's not much data
+    fs::create_dir_all(format!("champions/{}", seed)).unwrap();
+
+    for (run_idx, best_team) in best_teams.iter().enumerate() {
+        let output_path = format!("champions/{}/run{}.json", seed, run_idx+1);
+        let serialized = serde_json::to_string(best_team).unwrap();
+
+        let mut file = File::create(output_path.clone()).unwrap();
+
+        write!(file, "{}", serialized).unwrap();
+
+        println!("Wrote champion for run {} to {}", run_idx+1, output_path);
+    }
 
     println!("Ran with seed {}", seed);
 }

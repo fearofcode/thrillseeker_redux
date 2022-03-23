@@ -1,8 +1,9 @@
 use crate::{Function, ProblemParameters, Team};
 use fastrand::Rng;
 use std::fmt;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AcrobotAction {
     NegativeTorque,
     DoNothing,

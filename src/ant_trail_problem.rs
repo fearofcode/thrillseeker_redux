@@ -2,8 +2,9 @@ use crate::{Function, ProblemParameters, Team};
 use fastrand::Rng;
 use std::fmt;
 use crate::ant_trail::{Direction, Grid, MAXIMUM_MOVEMENTS, SANTA_FE_PERFECT_SCORE, WorldPosition};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AntTrailAction {
     Up,
     Down,
