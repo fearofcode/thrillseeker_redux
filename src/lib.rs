@@ -2,7 +2,6 @@ pub mod ant_trail;
 pub mod ant_trail_problem;
 pub mod acrobot;
 
-use clap::{App, Arg};
 use fastrand::Rng;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};

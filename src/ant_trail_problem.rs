@@ -118,7 +118,7 @@ pub fn ant_trail_individual_error(
     (SANTA_FE_PERFECT_SCORE - food_gathered) as f32
 }
 
-pub fn ant_trail_runs(seed: u64, dump: bool, mut rng: &mut Rng) -> (Vec<Team<AntTrailAction>>, ProblemParameters) {
+pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrailAction>>, ProblemParameters) {
     let mut id_counter: u64 = 1;
 
     let mut best_teams: Vec<Team<AntTrailAction>> = vec![];

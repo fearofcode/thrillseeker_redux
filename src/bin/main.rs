@@ -1,16 +1,10 @@
 use clap::{App, Arg};
 use fastrand::Rng;
-use rayon::prelude::*;
-use serde::{Serialize, Deserialize};
-use std::cmp::Ordering;
-use std::collections::HashSet;
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Display};
 use std::fs;
 use std::fs::File;
-use std::hash::{Hash, Hasher};
+use std::hash::{Hash};
 use std::io::prelude::*;
-use std::time::{SystemTime, UNIX_EPOCH};
 use thrillseeker_lib::{get_seed_value, ProblemParameters, Team};
 use thrillseeker_lib::ant_trail_problem::ant_trail_runs;
 
@@ -47,7 +41,7 @@ fn setup() -> (u64, bool, Rng) {
 
 fn print_best_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(best_teams: &Vec<Team<A>>, params: &ProblemParameters) {
+>(best_teams: &[Team<A>], params: &ProblemParameters) {
     println!("Best teams:");
 
     let constant_strings: Vec<String> = params.constant_list.iter().map(|c| c.to_string())

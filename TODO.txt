@@ -1,6 +1,6 @@
 - it looks like this version of ant trail is too easy.
 seed 1648011916547 finds a perfect solution. add visualization code to see output from champion
-solution using serialization above. make this a separate executable from model generation
+solution using serialization above.
 
 - after seeing optimal solution run, decide whether to make the problem easier or not
 

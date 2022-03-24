@@ -1,6 +1,5 @@
 use std::{env, fs, process};
-use serde::{Serialize, Deserialize};
-use thrillseeker_lib::ant_trail_problem::AntTrailAction;
+ use thrillseeker_lib::ant_trail_problem::AntTrailAction;
 use thrillseeker_lib::Team;
 
 fn main() {
