@@ -34,32 +34,32 @@ const EVALUATE_PARALLEL: bool = true;
 const MAX_ARITY: usize = 3;
 
 pub struct ProblemParameters {
-    input_count: usize,
-    register_count: usize,
-    population_size: usize,
-    population_to_delete: usize,
-    max_program_size: usize,
-    min_initial_program_size: usize,
-    max_initial_program_size: usize,
-    action_count: usize,
-    max_initial_team_size: usize,
-    max_team_size: usize,
-    tournament_size: usize,
-    generation_count: usize,
-    generation_stagnation_limit: usize,
-    run_count: usize,
-    p_delete_instruction: f32,
-    p_add_instruction: f32,
-    p_swap_instructions: f32,
-    p_change_destination: f32,
-    p_change_function: f32,
-    p_change_input: f32,
-    p_flip_input: f32,
-    p_change_action: f32,
-    p_delete_program: f32,
-    p_add_program: f32,
-    fitness_threshold: f32,
-    legal_functions: Vec<Function>,
+    pub input_count: usize,
+    pub register_count: usize,
+    pub population_size: usize,
+    pub population_to_delete: usize,
+    pub max_program_size: usize,
+    pub min_initial_program_size: usize,
+    pub max_initial_program_size: usize,
+    pub action_count: usize,
+    pub max_initial_team_size: usize,
+    pub max_team_size: usize,
+    pub tournament_size: usize,
+    pub generation_count: usize,
+    pub generation_stagnation_limit: usize,
+    pub run_count: usize,
+    pub p_delete_instruction: f32,
+    pub p_add_instruction: f32,
+    pub p_swap_instructions: f32,
+    pub p_change_destination: f32,
+    pub p_change_function: f32,
+    pub p_change_input: f32,
+    pub p_flip_input: f32,
+    pub p_change_action: f32,
+    pub p_delete_program: f32,
+    pub p_add_program: f32,
+    pub fitness_threshold: f32,
+    pub legal_functions: Vec<Function>,
     pub constant_list: Vec<f32>,
     pub feature_names: Vec<&'static str>
 }
@@ -75,7 +75,7 @@ impl ProblemParameters {
 }
 
 #[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
-enum Function {
+pub enum Function {
     Relu,
     Plus,
     Minus,
@@ -1509,7 +1509,7 @@ fn initialize_teams<
     teams
 }
 
-fn evaluate_team<
+pub fn evaluate_team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
     team: &Team<A>,

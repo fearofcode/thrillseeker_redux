@@ -37,7 +37,7 @@ static SANTA_FE_ANT_TRAIL: &str =
 // number of #'s above. we can terminate if this score is achieved
 pub const SANTA_FE_PERFECT_SCORE: usize = 89;
 
-pub const MAXIMUM_MOVEMENTS: usize = GRID_SIZE_USIZE*GRID_SIZE_USIZE;
+pub const MAXIMUM_MOVEMENTS: usize = 400;
 
 
 // assume every grid is this size

@@ -1,8 +1,7 @@
-- it looks like this version of ant trail is too easy.
-seed 1648011916547 finds a perfect solution. add visualization code to see output from champion
-solution using serialization above.
-
-- after seeing optimal solution run, decide whether to make the problem easier or not
+- fix different meanings of "fitness case". what should we do about problems like ant trail that
+pass an empty fitness case array but the evaluation code uses params.fitness_case_size()?
+- pull params out to be a standalone object so we don't have to copy it or return it the way we do now
+- clean up duplication between run_saved_model and ant_trail_problem individual_error function
 
 - run the program with dump = true and spend time looking at the data
 
