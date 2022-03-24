@@ -19,7 +19,7 @@ fn main() {
     let team: Team<AntTrailAction> = serde_json::from_str(&model_contents).unwrap();
 
     let params = ProblemParameters {
-        input_count: 4,
+        input_count: 8,
         register_count: 4,
         population_size: 10000,
         population_to_delete: 9500,
