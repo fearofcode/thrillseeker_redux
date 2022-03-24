@@ -1518,6 +1518,9 @@ pub fn evaluate_team<
     fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
 ) -> Vec<A> {
+    if fitness_cases.is_empty() || fitness_cases[0].len() == 0 {
+        panic!("No state to work off of")
+    }
     if fitness_cases[0].len() != params.fitness_case_size() {
         panic!("Misconfigured fitness cases? Expected length to be {}, was {}",
                params.fitness_case_size(), fitness_cases[0].len())

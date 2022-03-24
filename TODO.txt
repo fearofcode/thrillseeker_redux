@@ -1,25 +1,22 @@
+- run the program with dump = true and spend time looking at the data
+
 - fix different meanings of "fitness case". what should we do about problems like ant trail that
 pass an empty fitness case array but the evaluation code uses params.fitness_case_size()?
 - pull params out to be a standalone object so we don't have to copy it or return it the way we do now
 - clean up duplication between run_saved_model and ant_trail_problem individual_error function
-
-- run the program with dump = true and spend time looking at the data
-
-- then do the sme thing again
-- add any missing dump features
+- change data layout so that fitness_cases[register_index][operand1] can become fitness_cases[operand1][register_index]. compare time before and after
 
 - get indexed memory working on trivial memory problems, then use memory on ant trail
-
 i.e.:
-
 - give it a random sequence of integers and ask it to recall the previous value
 - ask it to compute a running sum
+- ask it to find the difference between minimum and maximum of a sequence
 - ask it to detect if a sum is increasing, decreasing, or neither
+this might require function evaluation code to move branching to one loop and branchless evaluation
+to another
 
 - add in LSH novelty search
 
 - do trivial synthetic time series. make it gradually more complex
 
 forex
-
-- change data layout so that fitness_cases[register_index][operand1] can become fitness_cases[operand1][register_index]. compare time before and after
