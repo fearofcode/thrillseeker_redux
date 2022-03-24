@@ -92,7 +92,8 @@ fn main() {
             if grid.is_food_in_direction(pos, Direction::UpRight) { 1.0 } else { 0.0 },
             if grid.is_food_in_direction(pos, Direction::DownRight) { 1.0 } else { 0.0 },
             if grid.is_food_in_direction(pos, Direction::UpLeft) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::DownLeft) { 1.0 } else { 0.0 }
+            if grid.is_food_in_direction(pos, Direction::DownLeft) { 1.0 } else { 0.0 },
+            0.0, 1.0, -1.0
         ];
         let outputs = crate::evaluate_team(&team, &[state], &params);
         let output = outputs[0];
@@ -108,19 +109,7 @@ fn main() {
             },
             AntTrailAction::Right => {
                 pos.facing = Direction::Right;
-            },
-            AntTrailAction::UpRight => {
-                pos.facing = Direction::UpRight;
-            },
-            AntTrailAction::DownRight => {
-                pos.facing = Direction::DownRight;
-            },
-            AntTrailAction::UpLeft => {
-                pos.facing = Direction::UpLeft;
-            },
-            AntTrailAction::DownLeft => {
-                pos.facing = Direction::DownLeft;
-            },
+            }
         }
 
         pos.one_move();

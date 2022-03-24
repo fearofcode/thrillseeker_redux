@@ -9,11 +9,7 @@ pub enum AntTrailAction {
     Up,
     Down,
     Left,
-    Right,
-    UpRight,
-    DownRight,
-    UpLeft,
-    DownLeft
+    Right
 }
 
 pub fn index_to_ant_trail_action(index: usize) -> AntTrailAction {
@@ -22,10 +18,6 @@ pub fn index_to_ant_trail_action(index: usize) -> AntTrailAction {
         1 => AntTrailAction::Down,
         2 => AntTrailAction::Left,
         3 => AntTrailAction::Right,
-        4 => AntTrailAction::UpRight,
-        5 => AntTrailAction::DownRight,
-        6 => AntTrailAction::UpLeft,
-        7 => AntTrailAction::DownLeft,
         _ => panic!(),
     }
 }
@@ -36,11 +28,7 @@ impl fmt::Display for AntTrailAction {
             AntTrailAction::Up => write!(f, "Up"),
             AntTrailAction::Down => write!(f, "Down"),
             AntTrailAction::Left => write!(f, "Left"),
-            AntTrailAction::Right => write!(f, "Right"),
-            AntTrailAction::UpRight => write!(f, "UpRight"),
-            AntTrailAction::DownRight => write!(f, "DownRight"),
-            AntTrailAction::UpLeft => write!(f, "UpLeft"),
-            AntTrailAction::DownLeft => write!(f, "DownLeft"),
+            AntTrailAction::Right => write!(f, "Right")
         }
     }
 }
@@ -72,7 +60,8 @@ pub fn ant_trail_individual_error(
             if grid.is_food_in_direction(pos, Direction::UpRight) { 1.0 } else { 0.0 },
             if grid.is_food_in_direction(pos, Direction::DownRight) { 1.0 } else { 0.0 },
             if grid.is_food_in_direction(pos, Direction::UpLeft) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::DownLeft) { 1.0 } else { 0.0 }
+            if grid.is_food_in_direction(pos, Direction::DownLeft) { 1.0 } else { 0.0 },
+            0.0, 1.0, -1.0
         ];
         let outputs = crate::evaluate_team(team, &[state], params);
         let output = outputs[0];
@@ -88,19 +77,7 @@ pub fn ant_trail_individual_error(
             },
             AntTrailAction::Right => {
                 pos.facing = Direction::Right;
-            },
-            AntTrailAction::UpRight => {
-                pos.facing = Direction::UpRight;
-            },
-            AntTrailAction::DownRight => {
-                pos.facing = Direction::DownRight;
-            },
-            AntTrailAction::UpLeft => {
-                pos.facing = Direction::UpLeft;
-            },
-            AntTrailAction::DownLeft => {
-                pos.facing = Direction::DownLeft;
-            },
+            }
         }
 
         pos.one_move();
@@ -124,20 +101,20 @@ pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrai
     let mut best_teams: Vec<Team<AntTrailAction>> = vec![];
 
     let ant_trail_parameters = ProblemParameters {
-        input_count: 4,
+        input_count: 8,
         register_count: 4,
         population_size: 10000,
         population_to_delete: 9500,
         max_program_size: 64,
         min_initial_program_size: 1,
         max_initial_program_size: 16,
-        // Up, Down, Left, Right, UpLeft, DownLeft, UpRight, DownRight
-        action_count: 8,
-        max_initial_team_size: 16,
+        // Up, Down, Left, Right
+        action_count: 4,
+        max_initial_team_size: 8,
         max_team_size: 64,
         tournament_size: 4,
         generation_count: 1000,
-        generation_stagnation_limit: 10,
+        generation_stagnation_limit: 25,
         run_count: 1,
         p_delete_instruction: 0.7,
         p_add_instruction: 0.7,

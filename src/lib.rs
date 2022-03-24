@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod ant_trail;
 pub mod ant_trail_problem;
 pub mod acrobot;
@@ -1516,6 +1518,11 @@ pub fn evaluate_team<
     fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
 ) -> Vec<A> {
+    if fitness_cases[0].len() != params.fitness_case_size() {
+        panic!("Misconfigured fitness cases? Expected length to be {}, was {}",
+               params.fitness_case_size(), fitness_cases[0].len())
+    }
+
     let team_outputs: Vec<Vec<f32>> = team
         .programs
         .iter()
