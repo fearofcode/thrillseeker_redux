@@ -1302,6 +1302,7 @@ pub struct Team<
 > {
     programs: Vec<Program<A>>,
     pub fitness: Option<f32>,
+    pub behavior_descriptor: String,
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
@@ -1422,6 +1423,8 @@ fn initialize_teams<
         let mut team = Team {
             programs: vec![],
             fitness: None,
+            // enough for storing all the positions in ant trail problem
+            behavior_descriptor: String::with_capacity(400*4),
             id: 0,
             parent1_id: 0,
             parent2_id: 0,
@@ -1702,20 +1705,24 @@ fn evaluate_teams<
     teams: &mut Vec<Team<A>>,
     fitness_cases: &[Vec<f32>],
     labels: &[A],
-    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> f32,
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> (f32, String),
     params: &ProblemParameters,
 ) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
             // tracking skipped evaluations the way we do in c++ code is not very helpful now
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
+                let (fitness, behavior_descriptor) = individual_error(team, fitness_cases, params, labels);
+                team.fitness = Some(fitness);
+                team.behavior_descriptor = behavior_descriptor.clone();
             }
         });
     } else {
         for team in teams.iter_mut() {
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
+                let (fitness, behavior_descriptor) = individual_error(team, fitness_cases, params, labels);
+                team.fitness = Some(fitness);
+                team.behavior_descriptor = behavior_descriptor.clone();
             }
         }
     }
@@ -1729,7 +1736,7 @@ fn one_run<
     fitness_cases: &[Vec<f32>],
     labels: &[A],
     params: &ProblemParameters,
-    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> f32,
+    individual_error: fn(&Team<A>, &[Vec<f32>], &ProblemParameters, &[A]) -> (f32, String),
     index_to_program_action: fn(usize) -> A,
     id_counter: &mut u64,
     dump: bool,
@@ -1870,6 +1877,7 @@ fn one_run<
                     parent1.parent1_id = parent1_id;
                     parent1.parent2_id = parent2_id;
                     parent1.fitness = None;
+                    parent1.behavior_descriptor.clear();
                     // only add new individuals
                     teams.push(parent1);
                     break;

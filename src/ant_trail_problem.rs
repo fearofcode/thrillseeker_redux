@@ -38,7 +38,7 @@ pub fn ant_trail_individual_error(
     _fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
     _unused_labels: &[AntTrailAction],
-) -> f32 {
+) -> (f32, String) {
     let mut pos = WorldPosition::new();
 
     let mut movement_count = 0;
