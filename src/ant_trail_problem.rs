@@ -51,6 +51,13 @@ pub fn ant_trail_individual_error(
     params: &ProblemParameters,
     _unused_labels: &[AntTrailAction],
 ) -> f32 {
+    let food_gathered = simulate_ant_trail(team, params, None);
+
+    (LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32
+}
+
+pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameters,
+                      callback: Option<fn(Grid, WorldPosition)>) -> usize {
     let mut pos = WorldPosition::new();
 
     let mut movement_count = 0;
@@ -78,7 +85,7 @@ pub fn ant_trail_individual_error(
         let output = outputs[0];
         match output {
             AntTrailAction::Up => {
-              pos.facing = Direction::Up;
+                pos.facing = Direction::Up;
             },
             AntTrailAction::Down => {
                 pos.facing = Direction::Down;
@@ -108,22 +115,22 @@ pub fn ant_trail_individual_error(
         if grid.food_at_position(pos) {
             food_gathered += 1;
             if food_gathered >= LOS_ALTOS_PERFECT_SCORE {
-                return 0.0;
+                return 0;
             }
             grid.remove_food_at_position(pos);
         }
+
+        if callback.is_some() {
+            callback.unwrap()(grid, pos);
+        }
+
         movement_count += 1;
     }
-
-    (LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32
+    food_gathered
 }
 
-pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrailAction>>, ProblemParameters) {
-    let mut id_counter: u64 = 1;
-
-    let mut best_teams: Vec<Team<AntTrailAction>> = vec![];
-
-    let ant_trail_parameters = ProblemParameters {
+pub fn ant_trail_parameters() -> ProblemParameters {
+    return ProblemParameters {
         input_count: 4,
         register_count: 4,
         population_size: 2000,
@@ -172,16 +179,24 @@ pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrai
         ],
         constant_list: vec![0.0, 1.0, -1.0],
         feature_names: vec!["food-at-up", "food-at-down", "food-at-left", "food-at-right",
-        "food-at-up-right", "food-at-down-right", "food-at-up-left", "food-at-down-left"]
+                            "food-at-up-right", "food-at-down-right", "food-at-up-left", "food-at-down-left"]
     };
 
-    for run in 1..=ant_trail_parameters.run_count {
+}
+pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrailAction>>, ProblemParameters) {
+    let mut id_counter: u64 = 1;
+
+    let mut best_teams: Vec<Team<AntTrailAction>> = vec![];
+
+    let params = ant_trail_parameters();
+
+    for run in 1..=params.run_count {
         best_teams.push(crate::one_run(
             run,
             rng,
             &[],
             &[],
-            &ant_trail_parameters,
+            &params,
             ant_trail_individual_error,
             index_to_ant_trail_action,
             &mut id_counter,
@@ -189,5 +204,5 @@ pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrai
             seed,
         ));
     }
-    (best_teams, ant_trail_parameters)
+    (best_teams, params)
 }

@@ -71,12 +71,12 @@ static LOS_ALTOS_ANT_TRAIL: &str =
 // number of #'s above. we can terminate if this score is achieved
 pub const LOS_ALTOS_PERFECT_SCORE: usize = 157;
 
-// same as koza
+// koza gives 3000 but this seems lousy
 pub const MAXIMUM_MOVEMENTS: usize = 3000;
 
 
 // assume every grid is this size
-pub const GRID_SIZE: i8 = 100;
+pub const GRID_SIZE: i8 = 70;
 pub const GRID_SIZE_USIZE: usize = GRID_SIZE as usize;
 
 #[derive(PartialEq, Copy, Debug, Clone)]
