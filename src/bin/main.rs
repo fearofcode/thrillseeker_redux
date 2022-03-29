@@ -6,6 +6,7 @@ use std::fs::File;
 use std::hash::{Hash};
 use std::io::prelude::*;
 use thrillseeker_lib::{get_seed_value, ProblemParameters, Team};
+use thrillseeker_lib::ant_trail::Grid;
 use thrillseeker_lib::ant_trail_problem::ant_trail_runs;
 
 fn setup() -> (u64, bool, Rng) {

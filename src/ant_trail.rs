@@ -1,47 +1,82 @@
 // modified from https://github.com/fearofcode/ant_trail/blob/master/src/lib.rs
 
-static SANTA_FE_ANT_TRAIL: &str =
-    ".###............................
-...#............................
-...#.....................###....
-...#....................#....#..
-...#....................#....#..
-...####.#####........##.........
-............#................#..
-............#.......#...........
-............#.......#........#..
-............#.......#...........
-....................#...........
-............#................#..
-............#...................
-............#.......#.....###...
-............#.......#..#........
-.................#..............
-................................
-............#...........#.......
-............#...#..........#....
-............#...#...............
-............#...#...............
-............#...#.........#.....
-............#..........#........
-............#...................
-...##..#####....#...............
-.#..............#...............
-.#..............#...............
-.#......#######.................
-.#.....#........................
-.......#........................
-..####..........................
-................................";
+static LOS_ALTOS_ANT_TRAIL: &str =
+    "###
+   #                                  .###..
+   #                                  #    #
+   #                                  #    #
+   ####.#####           .############..    .
+            #           .                  #
+            #           #                  .
+            #           #                  .
+            #           #                  #
+            .           #                  .
+            #           .                  .
+            #           .                  #
+            #           #                  .
+            #           #            ...###.
+            .       .#...            #
+            .       .                .
+            #       .                .
+            #       #                .#...
+            #       #                    #
+            #       #                    .
+            #       #                    .
+            #       .                ...#.
+            #       .                #
+ ..##..#####.       #                #
+ #                  #                #
+ #                  #                #
+ #                  #                #
+ #                  #                #
+ #                  #                #
+ #     .#####....##..                #
+ #     #                             #
+ .     #                             #
+ .####..                             #
+                                   #.#
+                                   #
+                                   #
+                                   #
+                                   #
+                                   #
+                                   #
+                                   #
+                              ######
+                              .
+                              #
+                              #
+                              #
+                              #
+                              #
+                              #
+                            #..
+                            #
+                            #
+                            #
+                            #
+                            #
+                      .######
+                      .
+                      #
+                      #
+                      #
+                      #
+                      #
+                      #
+                      #
+                      #
+                      #";
 
 // number of #'s above. we can terminate if this score is achieved
-pub const SANTA_FE_PERFECT_SCORE: usize = 89;
+pub const LOS_ALTOS_PERFECT_SCORE: usize = 157;
 
-pub const MAXIMUM_MOVEMENTS: usize = 400;
+// same as koza
+pub const MAXIMUM_MOVEMENTS: usize = 3000;
 
 
 // assume every grid is this size
-pub const GRID_SIZE: i8 = 32;
+pub const GRID_SIZE: i8 = 100;
 pub const GRID_SIZE_USIZE: usize = GRID_SIZE as usize;
 
 #[derive(PartialEq, Copy, Debug, Clone)]
@@ -56,34 +91,23 @@ impl Grid {
 
         let mut max_row_idx = 0;
 
-        for (row_idx, line) in trail_str.split_ascii_whitespace().enumerate() {
-            if line.len() != GRID_SIZE_USIZE {
-                panic!("Invalid line length");
-            }
-
+        for (row_idx, line) in trail_str.split_terminator('\n').enumerate() {
             for (col_idx, ch) in line.chars().enumerate() {
                 match ch {
                     '#' => {
                         grid.grid[row_idx][col_idx] = true;
                     },
-                    '.' => { },
-                    _ => {
-                        panic!("invalid char");
-                    }
+                    _ => {}
                 }
             }
             max_row_idx = row_idx;
         }
 
-        if max_row_idx != GRID_SIZE_USIZE - 1 {
-            panic!("Invalid row count");
-        }
-
         grid
     }
 
-    pub fn santa_fe_trail() -> Grid {
-        Grid::from_trail_string(SANTA_FE_ANT_TRAIL)
+    pub fn los_altos_trail() -> Grid {
+        Grid::from_trail_string(LOS_ALTOS_ANT_TRAIL)
     }
 
     pub fn draw(&self) {

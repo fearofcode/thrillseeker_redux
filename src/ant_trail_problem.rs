@@ -1,7 +1,7 @@
 use crate::{Function, ProblemParameters, Team};
 use fastrand::Rng;
 use std::fmt;
-use crate::ant_trail::{Direction, Grid, MAXIMUM_MOVEMENTS, SANTA_FE_PERFECT_SCORE, WorldPosition};
+use crate::ant_trail::{Direction, Grid, MAXIMUM_MOVEMENTS, LOS_ALTOS_PERFECT_SCORE, WorldPosition};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
@@ -56,7 +56,7 @@ pub fn ant_trail_individual_error(
     let mut movement_count = 0;
 
     let mut food_gathered = 0;
-    let mut grid = Grid::santa_fe_trail();
+    let mut grid = Grid::los_altos_trail();
 
     if grid.food_at_position(pos) {
         food_gathered += 1;
@@ -107,7 +107,7 @@ pub fn ant_trail_individual_error(
 
         if grid.food_at_position(pos) {
             food_gathered += 1;
-            if food_gathered >= SANTA_FE_PERFECT_SCORE {
+            if food_gathered >= LOS_ALTOS_PERFECT_SCORE {
                 return 0.0;
             }
             grid.remove_food_at_position(pos);
@@ -115,7 +115,7 @@ pub fn ant_trail_individual_error(
         movement_count += 1;
     }
 
-    (SANTA_FE_PERFECT_SCORE - food_gathered) as f32
+    (LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32
 }
 
 pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrailAction>>, ProblemParameters) {
@@ -127,13 +127,13 @@ pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrai
         input_count: 4,
         register_count: 4,
         population_size: 10000,
-        population_to_delete: 9500,
+        population_to_delete: 9000,
         max_program_size: 64,
         min_initial_program_size: 1,
-        max_initial_program_size: 16,
+        max_initial_program_size: 32,
         // Up, Down, Left, Right, UpLeft, DownLeft, UpRight, DownRight
         action_count: 8,
-        max_initial_team_size: 16,
+        max_initial_team_size: 24,
         max_team_size: 64,
         tournament_size: 4,
         generation_count: 1000,
@@ -151,24 +151,24 @@ pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrai
         p_add_program: 0.5,
         fitness_threshold: 0.0,
         legal_functions: vec![
-            Function::Relu,
-            Function::Plus,
-            Function::Minus,
-            Function::Times,
-            Function::Divide,
-            Function::Square,
-            Function::Sin,
-            Function::Log,
+            // Function::Relu,
+            // Function::Plus,
+            // Function::Minus,
+            // Function::Times,
+            // Function::Divide,
+            // Function::Square,
+            // Function::Sin,
+            // Function::Log,
             Function::And,
             Function::Or,
             Function::Not,
             Function::Xor,
-            Function::Min,
-            Function::Max,
+            // Function::Min,
+            // Function::Max,
             Function::Greater,
             Function::Less,
             Function::IfThenElse,
-            Function::Copy,
+            // Function::Copy,
         ],
         constant_list: vec![0.0, 1.0, -1.0],
         feature_names: vec!["food-at-up", "food-at-down", "food-at-left", "food-at-right",

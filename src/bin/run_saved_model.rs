@@ -1,6 +1,6 @@
 use std::{env, fs, process, thread, time};
 use thrillseeker_lib::{evaluate_team, Function, ProblemParameters};
-use thrillseeker_lib::ant_trail::{Direction, Grid, MAXIMUM_MOVEMENTS, SANTA_FE_PERFECT_SCORE, WorldPosition};
+use thrillseeker_lib::ant_trail::{Direction, Grid, MAXIMUM_MOVEMENTS, LOS_ALTOS_PERFECT_SCORE, WorldPosition};
 use thrillseeker_lib::ant_trail_problem::AntTrailAction;
 use thrillseeker_lib::Team;
 
@@ -70,7 +70,7 @@ fn main() {
                             "food-at-up-right", "food-at-down-right", "food-at-up-left", "food-at-down-left"]
     };
 
-    let mut grid = Grid::santa_fe_trail();
+    let mut grid = Grid::los_altos_trail();
 
     let mut food_gathered = 0;
 
@@ -127,7 +127,7 @@ fn main() {
 
         if grid.food_at_position(pos) {
             food_gathered += 1;
-            if food_gathered >= SANTA_FE_PERFECT_SCORE {
+            if food_gathered >= LOS_ALTOS_PERFECT_SCORE {
                 println!("Perfect score attained");
             }
             grid.remove_food_at_position(pos);
