@@ -89,8 +89,6 @@ impl Grid {
     pub fn from_trail_string(trail_str: &str) -> Grid {
         let mut grid = Grid { grid: [[false; GRID_SIZE_USIZE]; GRID_SIZE_USIZE] };
 
-        let mut max_row_idx = 0;
-
         for (row_idx, line) in trail_str.split_terminator('\n').enumerate() {
             for (col_idx, ch) in line.chars().enumerate() {
                 match ch {
@@ -100,7 +98,6 @@ impl Grid {
                     _ => {}
                 }
             }
-            max_row_idx = row_idx;
         }
 
         grid
