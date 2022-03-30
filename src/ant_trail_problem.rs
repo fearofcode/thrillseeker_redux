@@ -50,10 +50,10 @@ pub fn ant_trail_individual_error(
     _fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
     _unused_labels: &[AntTrailAction],
-) -> f32 {
+) -> (f32, String) {
     let food_gathered = simulate_ant_trail(team, params, None);
 
-    (LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32
+    ((LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32, String::new())
 }
 
 pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameters,

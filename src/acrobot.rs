@@ -152,7 +152,7 @@ pub fn acrobot_individual_error(
     fitness_cases: &[Vec<f32>],
     params: &ProblemParameters,
     _unused_labels: &[AcrobotAction],
-) -> f32 {
+) -> (f32, String) {
     let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
 
     let mut total_steps = 0;
@@ -211,7 +211,7 @@ pub fn acrobot_individual_error(
             .collect();
     }
 
-    total_steps as f32
+    (total_steps as f32, String::new())
 }
 
 pub fn acrobot_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AcrobotAction>>, ProblemParameters) {
