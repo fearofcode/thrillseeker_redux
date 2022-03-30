@@ -1,7 +1,6 @@
 // modified from https://github.com/fearofcode/ant_trail/blob/master/src/lib.rs
 
-static LOS_ALTOS_ANT_TRAIL: &str =
-    "###
+static LOS_ALTOS_ANT_TRAIL: &str = "###
    #                                  .###..
    #                                  #    #
    #                                  #    #
@@ -74,7 +73,6 @@ pub const LOS_ALTOS_PERFECT_SCORE: usize = 157;
 // koza gives 3000 but this seems lousy
 pub const MAXIMUM_MOVEMENTS: usize = 300;
 
-
 // assume every grid is this size
 pub const GRID_SIZE: i8 = 66;
 pub const GRID_SIZE_USIZE: usize = GRID_SIZE as usize;
@@ -82,12 +80,14 @@ pub const GRID_SIZE_USIZE: usize = GRID_SIZE as usize;
 #[derive(PartialEq, Copy, Debug, Clone)]
 pub struct Grid {
     // not as cache-efficient as a bitset, but easier to implement toroidal movement on
-    pub grid: [[bool; GRID_SIZE_USIZE]; GRID_SIZE_USIZE]
+    pub grid: [[bool; GRID_SIZE_USIZE]; GRID_SIZE_USIZE],
 }
 
 impl Grid {
     pub fn from_trail_string(trail_str: &str) -> Grid {
-        let mut grid = Grid { grid: [[false; GRID_SIZE_USIZE]; GRID_SIZE_USIZE] };
+        let mut grid = Grid {
+            grid: [[false; GRID_SIZE_USIZE]; GRID_SIZE_USIZE],
+        };
 
         for (row_idx, line) in trail_str.split_terminator('\n').enumerate() {
             for (col_idx, ch) in line.chars().enumerate() {
@@ -159,7 +159,7 @@ pub enum Direction {
     UpRight,
     DownRight,
     UpLeft,
-    DownLeft
+    DownLeft,
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -167,33 +167,38 @@ pub struct WorldPosition {
     // makes implementing movement easy
     pub(crate) x: i8,
     pub(crate) y: i8,
-    pub facing: Direction
+    pub facing: Direction,
 }
 
 impl WorldPosition {
     pub fn new() -> WorldPosition {
-        WorldPosition { x: 0, y: 0, facing: Direction::Right}
+        WorldPosition {
+            x: 0,
+            y: 0,
+            facing: Direction::Right,
+        }
     }
 
     fn new_from_coords(x: i8, y: i8, facing: Direction) -> Option<WorldPosition> {
         if x < GRID_SIZE && y < GRID_SIZE {
-            Some(WorldPosition { x, y, facing})
+            Some(WorldPosition { x, y, facing })
         } else {
             None
         }
     }
 
     pub fn position_ahead(self, dir: Direction) -> WorldPosition {
-        let mut new_x = self.x + match dir {
-            Direction::Down => 0,
-            Direction::Left => -1,
-            Direction::Right => 1,
-            Direction::Up => 0,
-            Direction::UpRight => 1,
-            Direction::DownRight => 1,
-            Direction::UpLeft => -1,
-            Direction::DownLeft => -1
-        };
+        let mut new_x = self.x
+            + match dir {
+                Direction::Down => 0,
+                Direction::Left => -1,
+                Direction::Right => 1,
+                Direction::Up => 0,
+                Direction::UpRight => 1,
+                Direction::DownRight => 1,
+                Direction::UpLeft => -1,
+                Direction::DownLeft => -1,
+            };
 
         // toroidal world: moving off the grid moves you back on to the grid on the other side (it's legal)
         if new_x < 0 {
@@ -202,16 +207,17 @@ impl WorldPosition {
             new_x -= GRID_SIZE;
         }
 
-        let mut new_y = self.y + match dir {
-            Direction::Down => 1,
-            Direction::Left => 0,
-            Direction::Right => 0,
-            Direction::Up => -1,
-            Direction::UpRight => -1,
-            Direction::DownRight => 1,
-            Direction::UpLeft => -1,
-            Direction::DownLeft => 1
-        };
+        let mut new_y = self.y
+            + match dir {
+                Direction::Down => 1,
+                Direction::Left => 0,
+                Direction::Right => 0,
+                Direction::Up => -1,
+                Direction::UpRight => -1,
+                Direction::DownRight => 1,
+                Direction::UpLeft => -1,
+                Direction::DownLeft => 1,
+            };
 
         if new_y < 0 {
             new_y += GRID_SIZE;

@@ -1,12 +1,14 @@
+pub mod acrobot;
 pub mod ant_trail;
 pub mod ant_trail_problem;
-pub mod acrobot;
+mod lsh;
 
+use crate::lsh::{index_documents, merge_into_archives, search_index};
 use fastrand::Rng;
 use rayon::prelude::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
@@ -23,8 +25,8 @@ fn random_float_in_range(rng: &mut Rng, lower: f32, upper: f32) -> f32 {
     lower + (upper - lower) * rng.f32()
 }
 
-// increment this when changes thta would invalidate serialized teams occur
-const THRILLSEEKER_VERSION: usize = 1;
+// increment this when changes that would invalidate serialized teams occur
+pub const THRILLSEEKER_VERSION: usize = 1;
 
 const EVALUATE_PARALLEL: bool = true;
 
@@ -32,6 +34,9 @@ const EVALUATE_PARALLEL: bool = true;
 // the actual effective max arity is lower. in general, this code views the function set as relatively
 // problem independent so the slight waste in space in each instruction is something that can be dealt with later
 const MAX_ARITY: usize = 3;
+
+// this can also probably be treated as problem-independent
+const NOVELTY_NEIGHBORS: usize = 10;
 
 pub struct ProblemParameters {
     pub input_count: usize,
@@ -61,7 +66,7 @@ pub struct ProblemParameters {
     pub fitness_threshold: f32,
     pub legal_functions: Vec<Function>,
     pub constant_list: Vec<f32>,
-    pub feature_names: Vec<&'static str>
+    pub feature_names: Vec<&'static str>,
 }
 
 impl ProblemParameters {
@@ -185,21 +190,25 @@ impl Instruction {
         let register0_string = format!("r[{}]", self.operands[0]);
         let register1_string = format!("r[{}]", self.operands[1]);
 
-        let register0_str = if is_register0 { register0_string.as_str() } else {
+        let register0_str = if is_register0 {
+            register0_string.as_str()
+        } else {
             let op = self.operands[0];
             if op < feature_names.len() {
                 feature_names[op]
             } else {
-                constants[op-feature_names.len()]
+                constants[op - feature_names.len()]
             }
         };
         let is_register1 = self.is_register[1];
-        let register1_str = if is_register1 { register1_string.as_str() } else {
+        let register1_str = if is_register1 {
+            register1_string.as_str()
+        } else {
             let op = self.operands[1];
             if op < feature_names.len() {
                 feature_names[op]
             } else {
-                constants[op-feature_names.len()]
+                constants[op - feature_names.len()]
             }
         };
 
@@ -218,10 +227,7 @@ impl Instruction {
             if infix_op(&self.op) {
                 println!("{} {} {};", register0_str, self.op, register1_str)
             } else {
-                println!(
-                    "{}({}, {});",
-                    self.op, register0_str, register1_str
-                );
+                println!("{}({}, {});", self.op, register0_str, register1_str);
             }
         } else {
             print!("{}(", self.op);
@@ -234,7 +240,7 @@ impl Instruction {
                         if op < feature_names.len() {
                             feature_names[op]
                         } else {
-                            constants[op-feature_names.len()]
+                            constants[op - feature_names.len()]
                         }
                     };
                     print!("{}", register_str);
@@ -437,7 +443,7 @@ impl<
             }
         }
     }
-    
+
     fn restore_introns(&mut self) {
         for intron in self.introns.iter() {
             if intron.index > self.active_instructions.len() {
@@ -1301,10 +1307,11 @@ pub struct Team<
     programs: Vec<Program<A>>,
     pub fitness: Option<f32>,
     pub behavior_descriptor: Option<String>,
+    pub novelty: Option<f32>,
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
-    version: usize,
+    pub version: usize,
 }
 
 impl<
@@ -1333,7 +1340,7 @@ impl<
 
         println!();
     }
-    
+
     fn restore_introns(&mut self) {
         for program in self.programs.iter_mut() {
             program.restore_introns();
@@ -1422,10 +1429,11 @@ fn initialize_teams<
             programs: vec![],
             fitness: None,
             behavior_descriptor: None,
+            novelty: None,
             id: 0,
             parent1_id: 0,
             parent2_id: 0,
-            version: THRILLSEEKER_VERSION
+            version: THRILLSEEKER_VERSION,
         };
         team.programs.reserve(params.max_team_size);
 
@@ -1550,16 +1558,29 @@ fn tournament_selection<
     (0..params.tournament_size)
         .map(|_| rng.usize(..params.deletion_point()))
         .max_by(|index1, index2| {
-            match teams[*index1]
-                .fitness
+            // check novelty, then fitness, then active instruction count
+            // TODO pull this into a comparison function
+            let team1 = &teams[*index1];
+            let team2 = &teams[*index2];
+
+            match team1
+                .novelty
                 .unwrap()
-                .partial_cmp(&teams[*index2].fitness.unwrap())
+                .partial_cmp(&team2.novelty.unwrap())
                 .unwrap()
             {
-                Ordering::Equal => teams[*index1]
-                    .active_instruction_count()
-                    .partial_cmp(&teams[*index2].active_instruction_count())
-                    .unwrap(),
+                Ordering::Equal => match team1
+                    .fitness
+                    .unwrap()
+                    .partial_cmp(&team2.fitness.unwrap())
+                    .unwrap()
+                {
+                    Ordering::Equal => team1
+                        .active_instruction_count()
+                        .partial_cmp(&team2.active_instruction_count())
+                        .unwrap(),
+                    other => other,
+                },
                 other => other,
             }
         })
@@ -1581,34 +1602,38 @@ fn mutate_team<
     let team_actions: Vec<_> = team.programs.iter().map(|p| p.action).collect();
 
     // prevent mutations that create empty programs
-    team.programs = team.programs.iter_mut().map(|program| {
-        let original_program = program.clone();
-        let mut mutated_program = original_program.clone();
+    team.programs = team
+        .programs
+        .iter_mut()
+        .map(|program| {
+            let original_program = program.clone();
+            let mut mutated_program = original_program.clone();
 
-        let mut retry_count = 0;
+            let mut retry_count = 0;
 
-        loop {
-            mutate_program(
-                &mut mutated_program,
-                &team_actions,
-                rng,
-                counter,
-                params,
-                index_to_program_action,
-            );
-            mutated_program.mark_introns(params);
-            if !mutated_program.active_instructions.is_empty() {
-                break;
+            loop {
+                mutate_program(
+                    &mut mutated_program,
+                    &team_actions,
+                    rng,
+                    counter,
+                    params,
+                    index_to_program_action,
+                );
+                mutated_program.mark_introns(params);
+                if !mutated_program.active_instructions.is_empty() {
+                    break;
+                }
+                mutated_program = original_program.clone();
+                retry_count += 1;
+                // if a program can't possibly be mutated without creating an empty program, give up
+                if retry_count > MAX_MUTATION_CROSSOVER_ATTEMPTS {
+                    break;
+                }
             }
-            mutated_program = original_program.clone();
-            retry_count += 1;
-            // if a program can't possibly be mutated without creating an empty program, give up
-            if retry_count > MAX_MUTATION_CROSSOVER_ATTEMPTS {
-                break;
-            }
-        }
-        mutated_program
-    }).collect();
+            mutated_program
+        })
+        .collect();
 
     if team.programs.len() < params.max_team_size && coin_flip(params.p_add_program, rng) {
         let other_team_index = rng.usize(..other_team.programs.len());
@@ -1654,38 +1679,41 @@ fn team_crossover<
     let used_team2_ids: HashSet<u64> = HashSet::new();
 
     // avoid doing crossover that would result in empty programs
-    team1.programs = team1.programs.iter().map(|program| {
-        let team1_action = program.action;
+    team1.programs = team1
+        .programs
+        .iter()
+        .map(|program| {
+            let team1_action = program.action;
 
-        for team2_program in team2.programs.iter_mut() {
-            let team2_action = team2_program.action;
-            if team1_action == team2_action && !used_team2_ids.contains(&team2.id) {
-                let original_program = program.clone();
-                let mut retry_count = 0;
-                loop {
-                    let mut crossed_over_program = original_program.clone();
-                    size_fair_dependent_instruction_crossover(
-                        &mut crossed_over_program,
-                        team2_program,
-                        rng,
-                        params,
-                    );
-                    crossed_over_program.mark_introns(params);
+            for team2_program in team2.programs.iter_mut() {
+                let team2_action = team2_program.action;
+                if team1_action == team2_action && !used_team2_ids.contains(&team2.id) {
+                    let original_program = program.clone();
+                    let mut retry_count = 0;
+                    loop {
+                        let mut crossed_over_program = original_program.clone();
+                        size_fair_dependent_instruction_crossover(
+                            &mut crossed_over_program,
+                            team2_program,
+                            rng,
+                            params,
+                        );
+                        crossed_over_program.mark_introns(params);
 
-                    if !crossed_over_program.active_instructions.is_empty() {
-                        return crossed_over_program;
-                    }
-                    retry_count += 1;
-                    if retry_count > MAX_MUTATION_CROSSOVER_ATTEMPTS {
-                        return program.clone()
+                        if !crossed_over_program.active_instructions.is_empty() {
+                            return crossed_over_program;
+                        }
+                        retry_count += 1;
+                        if retry_count > MAX_MUTATION_CROSSOVER_ATTEMPTS {
+                            return program.clone();
+                        }
                     }
                 }
-
             }
-        }
-        // if we can't find a viable crossover point, just return the original program
-        program.clone()
-    }).collect();
+            // if we can't find a viable crossover point, just return the original program
+            program.clone()
+        })
+        .collect();
 }
 
 fn evaluate_teams<
@@ -1701,7 +1729,8 @@ fn evaluate_teams<
         teams.par_iter_mut().for_each(|team| {
             // tracking skipped evaluations the way we do in c++ code is not very helpful now
             if team.fitness.is_none() {
-                let (fitness, behavior_descriptor) = individual_error(team, fitness_cases, params, labels);
+                let (fitness, behavior_descriptor) =
+                    individual_error(team, fitness_cases, params, labels);
                 team.fitness = Some(fitness);
                 team.behavior_descriptor = Some(behavior_descriptor);
             }
@@ -1709,7 +1738,8 @@ fn evaluate_teams<
     } else {
         for team in teams.iter_mut() {
             if team.fitness.is_none() {
-                let (fitness, behavior_descriptor) = individual_error(team, fitness_cases, params, labels);
+                let (fitness, behavior_descriptor) =
+                    individual_error(team, fitness_cases, params, labels);
                 team.fitness = Some(fitness);
                 team.behavior_descriptor = Some(behavior_descriptor);
             }
@@ -1735,6 +1765,8 @@ fn one_run<
 
     println!("Initializing teams...");
 
+    let mut archive: Vec<HashMap<u64, Vec<usize>>> = vec![];
+
     let mut teams = initialize_teams(rng, id_counter, params, index_to_program_action);
     println!("Done.");
 
@@ -1748,17 +1780,58 @@ fn one_run<
         println!("Starting generation {}", generation);
         evaluate_teams(&mut teams, fitness_cases, labels, individual_error, params);
 
+        let descriptors: Vec<String> = teams
+            .iter()
+            .map(|t| t.behavior_descriptor.as_ref().unwrap().clone())
+            .collect();
+
+        let generation_index = index_documents(&descriptors);
+
+        // i guess we stick the entire index into the archive?
+        merge_into_archives(&generation_index, &mut archive);
+
+        let mut similarity_cache: HashMap<(usize, usize), f32> = HashMap::new();
+        let mut alone_teams_count = 0;
+        for (team_index, team) in teams.iter_mut().enumerate() {
+            let similar_teams = search_index(
+                &descriptors,
+                &mut archive,
+                team_index,
+                &mut similarity_cache,
+                NOVELTY_NEIGHBORS,
+            );
+            // if there are no neighbors, it's presumably way far out so treat it as completely novel
+            if similar_teams.is_empty() {
+                team.novelty = Some(1.0);
+                alone_teams_count += 1;
+            } else {
+                let novelty_sum: f32 = similar_teams.iter().map(|(_index, similarity) | 1.0 - similarity)
+                    .sum();
+                team.novelty = Some(novelty_sum / similar_teams.len() as f32);
+            }
+        }
+        println!("{} teams were alone (had no neighbors)", alone_teams_count);
+
         teams.sort_by(|team1, team2| {
+            // check novelty, then fitness, then active instruction count
             match team1
-                .fitness
+                .novelty
                 .unwrap()
-                .partial_cmp(&team2.fitness.unwrap())
+                .partial_cmp(&team2.novelty.unwrap())
                 .unwrap()
             {
-                Ordering::Equal => team1
-                    .active_instruction_count()
-                    .partial_cmp(&team2.active_instruction_count())
-                    .unwrap(),
+                Ordering::Equal => match team1
+                    .fitness
+                    .unwrap()
+                    .partial_cmp(&team2.fitness.unwrap())
+                    .unwrap()
+                {
+                    Ordering::Equal => team1
+                        .active_instruction_count()
+                        .partial_cmp(&team2.active_instruction_count())
+                        .unwrap(),
+                    other => other,
+                },
                 other => other,
             }
         });
@@ -1826,6 +1899,8 @@ fn one_run<
         teams.truncate(params.deletion_point());
         assert_eq!(teams.len(), params.deletion_point());
 
+        let mut no_nearby_neighbor_count = 0;
+
         while teams.len() < params.population_size {
             loop {
                 let parent1_index = tournament_selection(&teams, rng, params);
@@ -1835,7 +1910,22 @@ fn one_run<
 
                 parent1.restore_introns();
 
-                let parent2_index = tournament_selection(&teams, rng, params);
+                // try to find the closest parent possible. if we can't, default back to tournament selection
+                let neighbor_teams = search_index(
+                    &descriptors,
+                    &mut archive,
+                    parent1_index,
+                    &mut similarity_cache,
+                    1,
+                );
+                let parent2_index = if neighbor_teams.is_empty() {
+                    tournament_selection(&teams, rng, params)
+                } else {
+                    neighbor_teams[0].0
+                };
+                if neighbor_teams.is_empty() {
+                    no_nearby_neighbor_count += 1;
+                }
                 let mut parent2 = teams[parent2_index].clone();
 
                 parent2.restore_introns();
@@ -1860,6 +1950,7 @@ fn one_run<
                 );
                 parent1.mark_introns(params);
 
+                // only add new individuals
                 if previous_team != parent1 {
                     *id_counter += 1;
                     parent1.id = *id_counter;
@@ -1867,12 +1958,13 @@ fn one_run<
                     parent1.parent2_id = parent2_id;
                     parent1.fitness = None;
                     parent1.behavior_descriptor = None;
-                    // only add new individuals
+                    parent1.novelty = None;
                     teams.push(parent1);
                     break;
                 }
             }
         }
+        println!("{} teams had no nearby neighbor", no_nearby_neighbor_count);
     }
 
     println!("Done with run # {}", run);

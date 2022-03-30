@@ -1,7 +1,7 @@
 use crate::{Function, ProblemParameters, Team};
 use fastrand::Rng;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AcrobotAction {
@@ -214,7 +214,11 @@ pub fn acrobot_individual_error(
     (total_steps as f32, String::new())
 }
 
-pub fn acrobot_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AcrobotAction>>, ProblemParameters) {
+pub fn acrobot_runs(
+    seed: u64,
+    dump: bool,
+    rng: &mut Rng,
+) -> (Vec<Team<AcrobotAction>>, ProblemParameters) {
     let mut id_counter: u64 = 1;
 
     let mut best_teams: Vec<Team<AcrobotAction>> = vec![];
@@ -268,7 +272,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AcrobotAc
             Function::Copy,
         ],
         constant_list: vec![0.0],
-        feature_names: vec!["x1", "v1", "x2", "v2"]
+        feature_names: vec!["x1", "v1", "x2", "v2"],
     };
 
     for _ in 0..100 {

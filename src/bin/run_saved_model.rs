@@ -1,8 +1,10 @@
-use std::{env, fs, process, thread};
 use std::time::Duration;
+use std::{env, fs, process, thread};
 use thrillseeker_lib::ant_trail::{Grid, WorldPosition};
-use thrillseeker_lib::ant_trail_problem::{ant_trail_parameters, AntTrailAction, simulate_ant_trail};
-use thrillseeker_lib::Team;
+use thrillseeker_lib::ant_trail_problem::{
+    ant_trail_parameters, simulate_ant_trail, AntTrailAction,
+};
+use thrillseeker_lib::{Team, THRILLSEEKER_VERSION};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -18,6 +20,12 @@ fn main() {
 
     let team: Team<AntTrailAction> = serde_json::from_str(&model_contents).unwrap();
 
+    if team.version != THRILLSEEKER_VERSION {
+        panic!(
+            "Team version is {} which does not match current version {}",
+            team.version, THRILLSEEKER_VERSION
+        );
+    }
     // TODO reuse logic from ant_trail_problem
 
     let params = ant_trail_parameters();

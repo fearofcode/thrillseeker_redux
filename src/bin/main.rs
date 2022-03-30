@@ -3,10 +3,10 @@ use fastrand::Rng;
 use std::fmt::{Debug, Display};
 use std::fs;
 use std::fs::File;
-use std::hash::{Hash};
+use std::hash::Hash;
 use std::io::prelude::*;
-use thrillseeker_lib::{get_seed_value, ProblemParameters, Team};
 use thrillseeker_lib::ant_trail_problem::ant_trail_runs;
+use thrillseeker_lib::{get_seed_value, ProblemParameters, Team};
 
 fn setup() -> (u64, bool, Rng) {
     let matches = App::new("thrillseeker")
@@ -41,11 +41,14 @@ fn setup() -> (u64, bool, Rng) {
 
 fn print_best_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(best_teams: &[Team<A>], params: &ProblemParameters) {
+>(
+    best_teams: &[Team<A>],
+    params: &ProblemParameters,
+) {
     println!("Best teams:");
 
-    let constant_strings: Vec<String> = params.constant_list.iter().map(|c| c.to_string())
-        .collect();
+    let constant_strings: Vec<String> =
+        params.constant_list.iter().map(|c| c.to_string()).collect();
     let constant_strs: Vec<&str> = constant_strings.iter().map(|c| c.as_str()).collect();
 
     for best_team in best_teams.iter() {
@@ -67,14 +70,14 @@ fn main() {
     fs::create_dir_all(format!("champions/{}", seed)).unwrap();
 
     for (run_idx, best_team) in best_teams.iter().enumerate() {
-        let output_path = format!("champions/{}/run{}.json", seed, run_idx+1);
+        let output_path = format!("champions/{}/run{}.json", seed, run_idx + 1);
         let serialized = serde_json::to_string(best_team).unwrap();
 
         let mut file = File::create(output_path.clone()).unwrap();
 
         write!(file, "{}", serialized).unwrap();
 
-        println!("Wrote champion for run {} to {}", run_idx+1, output_path);
+        println!("Wrote champion for run {} to {}", run_idx + 1, output_path);
     }
 
     println!("Ran with seed {}", seed);
