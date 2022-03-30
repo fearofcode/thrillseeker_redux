@@ -1805,7 +1805,9 @@ fn one_run<
                 team.novelty = Some(1.0);
                 alone_teams_count += 1;
             } else {
-                let novelty_sum: f32 = similar_teams.iter().map(|(_index, similarity) | 1.0 - similarity)
+                let novelty_sum: f32 = similar_teams
+                    .iter()
+                    .map(|(_index, similarity)| 1.0 - similarity)
                     .sum();
                 team.novelty = Some(novelty_sum / similar_teams.len() as f32);
             }

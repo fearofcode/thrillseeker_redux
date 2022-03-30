@@ -105,7 +105,7 @@ fn nearest_neighbors(
     similar_matches
 }
 
-pub fn index_documents(documents: &Vec<String>) -> Vec<HashMap<u64, Vec<usize>>> {
+pub fn index_documents(documents: &[String]) -> Vec<HashMap<u64, Vec<usize>>> {
     let mut buckets: Vec<HashMap<u64, Vec<usize>>> = vec![];
 
     let bucket_count = HASH_COUNT / BAND_SIZE;
@@ -147,22 +147,21 @@ pub fn search_index(
         }
     }
 
-    let top_neighbors = nearest_neighbors(query_index, n, &matches, documents, similarity_cache);
-    top_neighbors
+    nearest_neighbors(query_index, n, &matches, documents, similarity_cache)
 }
 
 //    let mut buckets = index_documents(&mut documents);
 // let (matches, top_neighbors) = search_index(&documents, &mut buckets, query, 25);
 
 pub fn merge_into_archives(
-    generation_index: &Vec<HashMap<u64, Vec<usize>>>,
-    archive: &mut Vec<HashMap<u64, Vec<usize>>>,
+    generation_index: &[HashMap<u64, Vec<usize>>],
+    archive: &mut [HashMap<u64, Vec<usize>>],
 ) {
     for (generation_bucket, archive_bucket) in generation_index.iter().zip(archive.iter_mut()) {
         for (key, value) in generation_bucket.iter() {
             archive_bucket
                 .entry(*key)
-                .or_insert(value.clone())
+                .or_insert_with(|| value.clone())
                 .extend(value);
         }
     }
