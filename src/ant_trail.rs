@@ -91,11 +91,8 @@ impl Grid {
 
         for (row_idx, line) in trail_str.split_terminator('\n').enumerate() {
             for (col_idx, ch) in line.chars().enumerate() {
-                match ch {
-                    '#' => {
-                        grid.grid[row_idx][col_idx] = true;
-                    },
-                    _ => {}
+                if ch == '#' {
+                    grid.grid[row_idx][col_idx] = true;
                 }
             }
         }

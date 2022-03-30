@@ -120,8 +120,8 @@ pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameter
             grid.remove_food_at_position(pos);
         }
 
-        if callback.is_some() {
-            callback.unwrap()(grid, pos);
+        if let Some(c) = callback {
+            c(grid, pos);
         }
 
         movement_count += 1;
@@ -130,7 +130,7 @@ pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameter
 }
 
 pub fn ant_trail_parameters() -> ProblemParameters {
-    return ProblemParameters {
+    ProblemParameters {
         input_count: 4,
         register_count: 4,
         population_size: 5000,
@@ -180,8 +180,7 @@ pub fn ant_trail_parameters() -> ProblemParameters {
         constant_list: vec![0.0, 1.0, -1.0],
         feature_names: vec!["food-at-up", "food-at-down", "food-at-left", "food-at-right",
                             "food-at-up-right", "food-at-down-right", "food-at-up-left", "food-at-down-left"]
-    };
-
+    }
 }
 pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrailAction>>, ProblemParameters) {
     let mut id_counter: u64 = 1;
