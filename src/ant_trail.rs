@@ -165,8 +165,8 @@ pub enum Direction {
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct WorldPosition {
     // makes implementing movement easy
-    x: i8,
-    y: i8,
+    pub(crate) x: i8,
+    pub(crate) y: i8,
     pub facing: Direction
 }
 

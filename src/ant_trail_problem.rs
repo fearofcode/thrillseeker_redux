@@ -51,19 +51,21 @@ pub fn ant_trail_individual_error(
     params: &ProblemParameters,
     _unused_labels: &[AntTrailAction],
 ) -> (f32, String) {
-    let food_gathered = simulate_ant_trail(team, params, None);
+    let (food_gathered, behavior) = simulate_ant_trail(team, params, None);
 
-    ((LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32, String::new())
+    ((LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32, behavior)
 }
 
 pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameters,
-                      callback: Option<fn(Grid, WorldPosition)>) -> usize {
+                      callback: Option<fn(Grid, WorldPosition)>) -> (usize, String) {
     let mut pos = WorldPosition::new();
 
     let mut movement_count = 0;
 
     let mut food_gathered = 0;
     let mut grid = Grid::los_altos_trail();
+
+    let mut actions: vec![format!("{:02}{:02}", pos.x, pos.y)];
 
     if grid.food_at_position(pos) {
         food_gathered += 1;
@@ -112,10 +114,11 @@ pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameter
 
         pos.one_move();
 
+        actions.push(format!("{:02}{:02}", pos.x, pos.y));
         if grid.food_at_position(pos) {
             food_gathered += 1;
             if food_gathered >= LOS_ALTOS_PERFECT_SCORE {
-                return 0;
+                return (0, ;
             }
             grid.remove_food_at_position(pos);
         }
