@@ -1548,6 +1548,32 @@ pub fn evaluate_team<
         .collect()
 }
 
+
+fn compare_teams<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(team1: &Team<A>, team2: &Team<A>) -> Ordering {
+    match team1
+        .novelty
+        .unwrap()
+        .partial_cmp(&team2.novelty.unwrap())
+        .unwrap()
+    {
+        Ordering::Equal => match team1
+            .fitness
+            .unwrap()
+            .partial_cmp(&team2.fitness.unwrap())
+            .unwrap()
+        {
+            Ordering::Equal => team1
+                .active_instruction_count()
+                .partial_cmp(&team2.active_instruction_count())
+                .unwrap(),
+            other => other,
+        },
+        other => other,
+    }
+}
+
 fn tournament_selection<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
@@ -1559,30 +1585,10 @@ fn tournament_selection<
         .map(|_| rng.usize(..params.deletion_point()))
         .max_by(|index1, index2| {
             // check novelty, then fitness, then active instruction count
-            // TODO pull this into a comparison function
             let team1 = &teams[*index1];
             let team2 = &teams[*index2];
 
-            match team1
-                .novelty
-                .unwrap()
-                .partial_cmp(&team2.novelty.unwrap())
-                .unwrap()
-            {
-                Ordering::Equal => match team1
-                    .fitness
-                    .unwrap()
-                    .partial_cmp(&team2.fitness.unwrap())
-                    .unwrap()
-                {
-                    Ordering::Equal => team1
-                        .active_instruction_count()
-                        .partial_cmp(&team2.active_instruction_count())
-                        .unwrap(),
-                    other => other,
-                },
-                other => other,
-            }
+            compare_teams(team1, team2)
         })
         .unwrap()
 }
@@ -1814,29 +1820,7 @@ fn one_run<
         }
         println!("{} teams were alone (had no neighbors)", alone_teams_count);
 
-        teams.sort_by(|team1, team2| {
-            // check novelty, then fitness, then active instruction count
-            match team1
-                .novelty
-                .unwrap()
-                .partial_cmp(&team2.novelty.unwrap())
-                .unwrap()
-            {
-                Ordering::Equal => match team1
-                    .fitness
-                    .unwrap()
-                    .partial_cmp(&team2.fitness.unwrap())
-                    .unwrap()
-                {
-                    Ordering::Equal => team1
-                        .active_instruction_count()
-                        .partial_cmp(&team2.active_instruction_count())
-                        .unwrap(),
-                    other => other,
-                },
-                other => other,
-            }
-        });
+        teams.sort_by(compare_teams);
 
         if dump {
             fs::create_dir_all(format!("dump/{}", seed)).unwrap();

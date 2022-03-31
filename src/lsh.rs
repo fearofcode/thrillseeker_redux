@@ -150,9 +150,6 @@ pub fn search_index(
     nearest_neighbors(query_index, n, &matches, documents, similarity_cache)
 }
 
-//    let mut buckets = index_documents(&mut documents);
-// let (matches, top_neighbors) = search_index(&documents, &mut buckets, query, 25);
-
 pub fn merge_into_archives(
     generation_index: &[HashMap<u64, Vec<usize>>],
     archive: &mut [HashMap<u64, Vec<usize>>],
