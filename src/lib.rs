@@ -1548,10 +1548,12 @@ pub fn evaluate_team<
         .collect()
 }
 
-
 fn compare_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(team1: &Team<A>, team2: &Team<A>) -> Ordering {
+>(
+    team1: &Team<A>,
+    team2: &Team<A>,
+) -> Ordering {
     match team1
         .novelty
         .unwrap()
