@@ -173,8 +173,8 @@ pub fn ant_trail_parameters() -> ProblemParameters {
     ProblemParameters {
         input_count: 4,
         register_count: 4,
-        population_size: 5000,
-        population_to_delete: 4500,
+        population_size: 50,
+        population_to_delete: 45,
         max_program_size: 64,
         min_initial_program_size: 1,
         max_initial_program_size: 32,
@@ -184,7 +184,9 @@ pub fn ant_trail_parameters() -> ProblemParameters {
         max_team_size: 64,
         tournament_size: 4,
         generation_count: 1000,
-        generation_stagnation_limit: 25,
+        // stop trying to control everything and just let go.
+        // if we want to achieve our highest goals, we must be willing to abandon them.
+        generation_stagnation_limit: 1000,
         run_count: 1,
         p_delete_instruction: 0.7,
         p_add_instruction: 0.7,

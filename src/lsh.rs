@@ -2,6 +2,8 @@ use std::cmp::{max, min, Reverse};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::iter::StepBy;
+use std::ops::Range;
 
 use rayon::prelude::*;
 
@@ -15,17 +17,12 @@ const SHINGLE_STRIDE: usize = 4 + 1;
 fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
     // single hash function. for justification, see https://robertheaton.com/2014/05/02/jaccard-similarity-and-minhash-for-winners/
     // and http://web.eecs.utk.edu/~jplank/plank/classes/cs494/494/notes/Min-Hash/index.html
-    let shingle_count = if (document.len() - SHINGLE_SIZE) % SHINGLE_STRIDE == 0 {
-        (document.len() - SHINGLE_SIZE) / SHINGLE_STRIDE
-    } else {
-        // document len 99, shingle size 5, shingle count = 99 // 5 + 1 == 19 + 1 == 20
-        (document.len() - SHINGLE_SIZE) / SHINGLE_STRIDE + 1
-    };
+    let shingle_count = document_shingle_count(document);
 
     let mut heap = BinaryHeap::with_capacity(shingle_count);
 
     let mut hashes = vec![];
-    for idx in (0..(document.len() - SHINGLE_SIZE)).step_by(SHINGLE_STRIDE) {
+    for idx in shingle_iterator(document) {
         let shingle = &document[idx..idx + SHINGLE_SIZE];
         let mut hasher = DefaultHasher::new();
         shingle.hash(&mut hasher);
@@ -53,10 +50,22 @@ fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
         .collect()
 }
 
+fn shingle_iterator(document: &str) -> StepBy<Range<usize>> {
+    (0..(document.len() - SHINGLE_SIZE)).step_by(SHINGLE_STRIDE)
+}
+
+fn document_shingle_count(document: &str) -> usize {
+    if (document.len() - SHINGLE_SIZE) % SHINGLE_STRIDE == 0 {
+        (document.len() - SHINGLE_SIZE) / SHINGLE_STRIDE
+    } else {
+        // document len 99, shingle size 5, shingle count = 99 // 5 + 1 == 19 + 1 == 20
+        (document.len() - SHINGLE_SIZE) / SHINGLE_STRIDE + 1
+    }
+}
+
 fn string_shingles(document: &str) -> HashSet<u64> {
-    let shingle_count = document.len() - SHINGLE_SIZE;
     let mut shingles = HashSet::new();
-    for idx in 0..shingle_count {
+    for idx in shingle_iterator(document) {
         let shingle = &document[idx..idx + SHINGLE_SIZE];
         let mut hasher = DefaultHasher::new();
         shingle.hash(&mut hasher);
@@ -78,11 +87,17 @@ fn nearest_neighbors(
     documents: &[String],
     similarity_cache: &mut HashMap<(usize, usize), f32>,
 ) -> Vec<(usize, f32)> {
+    if matches.is_empty() {
+        return vec![];
+    }
     let query = &documents[query_index];
     let query_shingles = string_shingles(query);
     let mut similar_matches: Vec<(usize, f32)> = matches
-        // .par_iter() TODO does this help?
+        // .par_iter() TODO does this help? it would make caching with similarity_cache harder :(
+        // @Performance determine if par_iter() would be faster
         .iter()
+        // filter out ourselves
+        .filter(|match_index| **match_index != query_index)
         .map(|match_index| {
             let key: (usize, usize) = (
                 min(query_index, *match_index),
@@ -106,12 +121,7 @@ fn nearest_neighbors(
 }
 
 pub fn index_documents(documents: &[String]) -> Vec<HashMap<u64, Vec<usize>>> {
-    let mut buckets: Vec<HashMap<u64, Vec<usize>>> = vec![];
-
-    let bucket_count = HASH_COUNT / BAND_SIZE;
-    for _ in 0..bucket_count {
-        buckets.push(HashMap::new());
-    }
+    let mut buckets = empty_buckets();
 
     let chunked_min_hashes: Vec<Vec<(usize, u64)>> = documents
         .par_iter()
@@ -126,6 +136,16 @@ pub fn index_documents(documents: &[String]) -> Vec<HashMap<u64, Vec<usize>>> {
                 .or_insert(vec![])
                 .push(document_index);
         }
+    }
+    buckets
+}
+
+pub fn empty_buckets() -> Vec<HashMap<u64, Vec<usize>>> {
+    let mut buckets: Vec<HashMap<u64, Vec<usize>>> = vec![];
+
+    let bucket_count = HASH_COUNT / BAND_SIZE;
+    for _ in 0..bucket_count {
+        buckets.push(HashMap::new());
     }
     buckets
 }
@@ -158,8 +178,8 @@ pub fn merge_into_archives(
         for (key, value) in generation_bucket.iter() {
             archive_bucket
                 .entry(*key)
-                .or_insert_with(|| value.clone())
-                .extend(value);
+                .or_insert_with(|| vec![])
+                .extend(value.clone());
         }
     }
 }

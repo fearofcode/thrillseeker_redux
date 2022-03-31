@@ -3,7 +3,7 @@ pub mod ant_trail;
 pub mod ant_trail_problem;
 mod lsh;
 
-use crate::lsh::{index_documents, merge_into_archives, search_index};
+use crate::lsh::{index_documents, merge_into_archives, search_index, empty_buckets};
 use fastrand::Rng;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ fn random_float_in_range(rng: &mut Rng, lower: f32, upper: f32) -> f32 {
 // increment this when changes that would invalidate serialized teams occur
 pub const THRILLSEEKER_VERSION: usize = 1;
 
-const EVALUATE_PARALLEL: bool = true;
+const EVALUATE_PARALLEL: bool = false;
 
 // this can be treated as problem-independent even though a given problem might pick a subset where
 // the actual effective max arity is lower. in general, this code views the function set as relatively
@@ -1554,10 +1554,11 @@ fn compare_teams<
     team1: &Team<A>,
     team2: &Team<A>,
 ) -> Ordering {
-    match team1
+    // highest novelty to lower
+    match team2
         .novelty
         .unwrap()
-        .partial_cmp(&team2.novelty.unwrap())
+        .partial_cmp(&team1.novelty.unwrap())
         .unwrap()
     {
         Ordering::Equal => match team1
@@ -1773,7 +1774,7 @@ fn one_run<
 
     println!("Initializing teams...");
 
-    let mut archive: Vec<HashMap<u64, Vec<usize>>> = vec![];
+    let mut archive = empty_buckets();
 
     let mut teams = initialize_teams(rng, id_counter, params, index_to_program_action);
     println!("Done.");
@@ -1906,6 +1907,8 @@ fn one_run<
                     &mut similarity_cache,
                     1,
                 );
+                // WIP this is where we left off
+                todo!();
                 let parent2_index = if neighbor_teams.is_empty() {
                     tournament_selection(&teams, rng, params)
                 } else {
