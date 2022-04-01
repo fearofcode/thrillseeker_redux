@@ -14,7 +14,26 @@ const SHINGLE_SIZE: usize = 4 * 3 + 2;
 // one position in ant trail
 const SHINGLE_STRIDE: usize = 4 + 1;
 
-fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
+// without the following types, the types become confusing.
+#[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Debug)]
+struct HashCode(u64);
+
+#[derive(Debug, Hash, Clone)]
+pub struct TeamRecord {
+    pub(crate) team_id: u64,
+    pub(crate) behavior_descriptor: String
+}
+
+#[derive(Debug, Hash, Clone)]
+pub struct Bucket(pub HashMap<HashCode, Vec<TeamRecord>>);
+
+#[derive(Debug, Hash, Clone)]
+pub struct BandedBucket(pub Vec<Bucket>);
+
+#[derive(Debug, Hash, Clone)]
+pub struct Archive(pub HashMap<usize, (usize, String)>);
+
+fn chunked_min_hash(document: &str) -> Vec<(usize, HashCode)> {
     // single hash function. for justification, see https://robertheaton.com/2014/05/02/jaccard-similarity-and-minhash-for-winners/
     // and http://web.eecs.utk.edu/~jplank/plank/classes/cs494/494/notes/Min-Hash/index.html
     let shingle_count = document_shingle_count(document);
@@ -44,7 +63,7 @@ fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
         .map(|chunk| {
             let mut hasher = DefaultHasher::new();
             chunk.hash(&mut hasher);
-            hasher.finish()
+            HashCode(hasher.finish())
         })
         .enumerate()
         .collect()
@@ -63,55 +82,109 @@ fn document_shingle_count(document: &str) -> usize {
     }
 }
 
-fn string_shingles(document: &str) -> HashSet<u64> {
+fn string_shingles(document: &str) -> HashSet<HashCode> {
     let mut shingles = HashSet::new();
     for idx in shingle_iterator(document) {
         let shingle = &document[idx..idx + SHINGLE_SIZE];
         let mut hasher = DefaultHasher::new();
         shingle.hash(&mut hasher);
-        let shingle_hash = hasher.finish();
+        let shingle_hash = HashCode(hasher.finish());
         shingles.insert(shingle_hash);
     }
     shingles
 }
 
-fn jaccard_similarity(a: &HashSet<u64>, b: &HashSet<u64>) -> f32 {
+fn jaccard_similarity(a: &HashSet<HashCode>, b: &HashSet<HashCode>) -> f32 {
     let intersection_cardinality = a.intersection(b).count();
     (intersection_cardinality as f32) / ((a.len() + b.len() - intersection_cardinality) as f32)
 }
 
-fn nearest_neighbors(
-    query_index: usize,
+pub fn index_documents(archive: &Archive) -> BandedBucket {
+    let mut buckets = empty_buckets();
+
+    let chunked_min_hashes: Vec<Vec<(usize, HashCode)>> = archive
+        .par_iter()
+        .map(|team_record| chunked_min_hash(&team_record.behavior_descriptor))
+        .collect();
+
+    for (document_index, chunked_min_hash) in chunked_min_hashes.iter().enumerate() {
+        let team_record = archive[document_index].clone();
+        for (bucket_index, min_hash) in chunked_min_hash.iter() {
+            let bucket = &mut buckets.0[*bucket_index].0;
+            bucket
+                .entry(*min_hash)
+                .or_insert(vec![])
+                .push(team_record.clone());
+        }
+    }
+    buckets
+}
+
+pub fn empty_buckets() -> BandedBucket {
+    let mut buckets: BandedBucket = BandedBucket(vec![]);
+
+    let bucket_count = HASH_COUNT / BAND_SIZE;
+    for _ in 0..bucket_count {
+        buckets.0.push(Bucket(HashMap::new()));
+    }
+    buckets
+}
+
+pub fn search_index(
+    archive: &Archive,
+    buckets: &mut BandedBucket,
+    query: &TeamRecord,
+    similarity_cache: &mut HashMap<(u64, u64), f32>,
     n: usize,
-    matches: &HashSet<usize>,
-    documents: &[String],
-    similarity_cache: &mut HashMap<(usize, usize), f32>,
+    max_similarity: f32
+) -> Vec<(usize, f32)> {
+    let mut matches: HashSet<TeamRecord> = HashSet::new();
+    let query_signature = chunked_min_hash(&query.behavior_descriptor);
+    for (bucket_index, min_hash) in query_signature.iter() {
+        let bucket = &mut buckets.0[*bucket_index].0;
+        if bucket.contains_key(min_hash) {
+            matches.extend(&bucket[min_hash]);
+        }
+    }
+
+    nearest_neighbors(query, n, &matches, archive, similarity_cache, max_similarity)
+}
+
+
+fn nearest_neighbors(
+    query: &TeamRecord,
+    n: usize,
+    matches: &HashSet<TeamRecord>,
+    archive: &Archive,
+    similarity_cache: &mut HashMap<(u64, u64), f32>,
+    max_similarity: f32
 ) -> Vec<(usize, f32)> {
     if matches.is_empty() {
         return vec![];
     }
-    let query = &documents[query_index];
+    let team_id = query.team_id;
     let query_shingles = string_shingles(query);
     let mut similar_matches: Vec<(usize, f32)> = matches
         // .par_iter() TODO does this help? it would make caching with similarity_cache harder :(
         // @Performance determine if par_iter() would be faster
         .iter()
         // filter out ourselves
-        .filter(|match_index| **match_index != query_index)
+        .filter(|match_id| match_id.clone() != team_id)
         .map(|match_index| {
-            let key: (usize, usize) = (
-                min(query_index, *match_index),
-                max(query_index, *match_index),
+            let key: (u64, u64) = (
+                min(team_id, *match_index.team_id),
+                max(team_id, *match_index.team_id),
             );
             if similarity_cache.contains_key(&key) {
                 return (*match_index, *similarity_cache.get(&key).unwrap());
             }
-            let document = &documents[*match_index];
-            let match_shingles = string_shingles(document);
+            let team_record = archive[*match_index];
+            let match_shingles = string_shingles(team_record.behavior_descriptor);
             let similarity = jaccard_similarity(&query_shingles, &match_shingles);
             similarity_cache.insert(key, similarity);
             (*match_index, similarity)
         })
+        .filter(|(_m, similarity)| *similarity <= max_similarity)
         .collect();
     similar_matches.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     if similar_matches.len() > n {
@@ -120,63 +193,22 @@ fn nearest_neighbors(
     similar_matches
 }
 
-pub fn index_documents(documents: &[String]) -> Vec<HashMap<u64, Vec<usize>>> {
-    let mut buckets = empty_buckets();
-
-    let chunked_min_hashes: Vec<Vec<(usize, u64)>> = documents
-        .par_iter()
-        .map(|document| chunked_min_hash(document))
-        .collect();
-
-    for (document_index, chunked_min_hash) in chunked_min_hashes.iter().enumerate() {
-        for (bucket_index, min_hash) in chunked_min_hash.iter() {
-            let bucket = &mut buckets[*bucket_index];
-            bucket
-                .entry(*min_hash)
-                .or_insert(vec![])
-                .push(document_index);
-        }
-    }
-    buckets
-}
-
-pub fn empty_buckets() -> Vec<HashMap<u64, Vec<usize>>> {
-    let mut buckets: Vec<HashMap<u64, Vec<usize>>> = vec![];
-
-    let bucket_count = HASH_COUNT / BAND_SIZE;
-    for _ in 0..bucket_count {
-        buckets.push(HashMap::new());
-    }
-    buckets
-}
-
-pub fn search_index(
-    documents: &[String],
-    buckets: &mut Vec<HashMap<u64, Vec<usize>>>,
-    query_index: usize,
-    similarity_cache: &mut HashMap<(usize, usize), f32>,
-    n: usize,
-) -> Vec<(usize, f32)> {
-    let mut matches: HashSet<usize> = HashSet::new();
-    let query = &documents[query_index];
-    let query_signature = chunked_min_hash(query);
-    for (bucket_index, min_hash) in query_signature.iter() {
-        let bucket = &mut buckets[*bucket_index];
-        if bucket.contains_key(min_hash) {
-            matches.extend(&bucket[min_hash]);
-        }
-    }
-
-    nearest_neighbors(query_index, n, &matches, documents, similarity_cache)
-}
-
 pub fn merge_into_archives(
-    generation_index: &[HashMap<u64, Vec<usize>>],
-    archive: &mut [HashMap<u64, Vec<usize>>],
+    generation_archive: &Archive,
+    archive: &mut Archive,
 ) {
-    for (generation_bucket, archive_bucket) in generation_index.iter().zip(archive.iter_mut()) {
-        for (key, value) in generation_bucket.iter() {
-            archive_bucket
+    for (generation_team_id, generation_value) in generation_archive.iter() {
+        archive.0.insert(*generation_team_id, generation_value.clone());
+    }
+}
+
+pub fn merge_into_run_index(
+    generation_index: &BandedBucket,
+    run_index: &mut BandedBucket,
+) {
+    for (generation_bucket, archive_bucket) in generation_index.0.iter().zip(run_index.0.iter_mut()) {
+        for (key, value) in generation_bucket.0.iter() {
+            archive_bucket.0
                 .entry(*key)
                 .or_insert_with(|| vec![])
                 .extend(value.clone());

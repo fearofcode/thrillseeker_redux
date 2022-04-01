@@ -3,7 +3,7 @@ pub mod ant_trail;
 pub mod ant_trail_problem;
 mod lsh;
 
-use crate::lsh::{index_documents, merge_into_archives, search_index, empty_buckets};
+use crate::lsh::{index_documents, merge_into_archives, search_index, empty_buckets, TeamRecord, merge_into_run_index, Archive};
 use fastrand::Rng;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -1318,6 +1318,13 @@ impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Team<A>
 {
+    pub fn record(&self) -> TeamRecord {
+        TeamRecord {
+            team_id: self.id,
+            behavior_descriptor: self.behavior_descriptor.unwrap().clone()
+        }
+    }
+
     pub fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         println!("Team ID #{}", self.id);
 
@@ -1774,7 +1781,8 @@ fn one_run<
 
     println!("Initializing teams...");
 
-    let mut archive = empty_buckets();
+    let mut run_index = empty_buckets();
+    let mut archive: Archive = Archive(HashMap::new());
 
     let mut teams = initialize_teams(rng, id_counter, params, index_to_program_action);
     println!("Done.");
@@ -1785,29 +1793,33 @@ fn one_run<
 
     let mut stagnation_count = 0;
 
+    // between team IDs
+    let mut similarity_cache: HashMap<(u64, u64), f32> = HashMap::new();
+
     for generation in 1..=params.generation_count {
         println!("Starting generation {}", generation);
         evaluate_teams(&mut teams, fitness_cases, labels, individual_error, params);
 
-        let descriptors: Vec<String> = teams
+        let generation_archive = Archive(teams
             .iter()
-            .map(|t| t.behavior_descriptor.as_ref().unwrap().clone())
-            .collect();
+            .enumerate()
+            .map(|(team_index, team)| (team.id, (team_index, team.behavior_descriptor.clone())))
+            .collect());
+        let mut generation_index = index_documents(&generation_archive);
 
-        let generation_index = index_documents(&descriptors);
+        merge_into_archives(&generation_archive, &mut archive);
+        merge_into_run_index(&generation_index, &mut run_index);
 
-        // i guess we stick the entire index into the archive?
-        merge_into_archives(&generation_index, &mut archive);
-
-        let mut similarity_cache: HashMap<(usize, usize), f32> = HashMap::new();
         let mut alone_teams_count = 0;
         for (team_index, team) in teams.iter_mut().enumerate() {
+            let team_record = TeamRecord { team_id: team.id, behavior_descriptor: team.behavior_descriptor.unwrap().clone() };
             let similar_teams = search_index(
-                &descriptors,
-                &mut archive,
-                team_index,
+                &archive,
+                &mut run_index,
+                &team_record,
                 &mut similarity_cache,
                 NOVELTY_NEIGHBORS,
+                1.0
             );
             // if there are no neighbors, it's presumably way far out so treat it as completely novel
             if similar_teams.is_empty() {
@@ -1901,14 +1913,14 @@ fn one_run<
 
                 // try to find the closest parent possible. if we can't, default back to tournament selection
                 let neighbor_teams = search_index(
-                    &descriptors,
-                    &mut archive,
+                    &archive,
+                    &mut generation_index,
                     parent1_index,
                     &mut similarity_cache,
                     1,
+                    0.999
                 );
-                // WIP this is where we left off
-                todo!();
+
                 let parent2_index = if neighbor_teams.is_empty() {
                     tournament_selection(&teams, rng, params)
                 } else {
