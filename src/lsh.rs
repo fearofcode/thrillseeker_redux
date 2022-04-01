@@ -18,14 +18,14 @@ const SHINGLE_STRIDE: usize = 4 + 1;
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Debug)]
 struct HashCode(u64);
 
-#[derive(Debug, Hash, Clone)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct TeamRecord {
     pub(crate) team_id: u64,
     pub(crate) behavior_descriptor: String
 }
 
 #[derive(Debug, Hash, Clone)]
-pub struct Bucket(pub HashMap<HashCode, Vec<TeamRecord>>);
+pub struct Bucket(pub HashMap<HashCode, Vec<usize>>);
 
 #[derive(Debug, Hash, Clone)]
 pub struct BandedBucket(pub Vec<Bucket>);
@@ -102,13 +102,13 @@ fn jaccard_similarity(a: &HashSet<HashCode>, b: &HashSet<HashCode>) -> f32 {
 pub fn index_documents(archive: &Archive) -> BandedBucket {
     let mut buckets = empty_buckets();
 
-    let chunked_min_hashes: Vec<Vec<(usize, HashCode)>> = archive
+    let chunked_min_hashes: Vec<Vec<(usize, HashCode)>> = archive.0
         .par_iter()
-        .map(|team_record| chunked_min_hash(&team_record.behavior_descriptor))
+        .map(|(_team_id, (_team_index, descriptor))| chunked_min_hash(&descriptor))
         .collect();
 
     for (document_index, chunked_min_hash) in chunked_min_hashes.iter().enumerate() {
-        let team_record = archive[document_index].clone();
+        let team_record = archive.0[&document_index].clone();
         for (bucket_index, min_hash) in chunked_min_hash.iter() {
             let bucket = &mut buckets.0[*bucket_index].0;
             bucket
@@ -143,7 +143,8 @@ pub fn search_index(
     for (bucket_index, min_hash) in query_signature.iter() {
         let bucket = &mut buckets.0[*bucket_index].0;
         if bucket.contains_key(min_hash) {
-            matches.extend(&bucket[min_hash]);
+            let bucket_matches = &bucket[min_hash];
+            matches.extend(bucket_matches);
         }
     }
 
