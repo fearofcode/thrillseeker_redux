@@ -71,7 +71,7 @@ static LOS_ALTOS_ANT_TRAIL: &str = "###
 pub const LOS_ALTOS_PERFECT_SCORE: usize = 157;
 
 // koza gives 3000 but this seems lousy
-pub const MAXIMUM_MOVEMENTS: usize = 3000;
+pub const MAXIMUM_MOVEMENTS: usize = 1500;
 
 // assume every grid is this size
 pub const GRID_SIZE: i8 = 66;

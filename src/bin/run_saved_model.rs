@@ -2,7 +2,7 @@ use std::time::Duration;
 use std::{env, fs, process, thread};
 use thrillseeker_lib::ant_trail::{Grid, WorldPosition};
 use thrillseeker_lib::ant_trail_problem::{
-    ant_trail_parameters, simulate_ant_trail, AntTrailAction,
+    ant_trail_parameters, simulate_ant_trail, AntTrailAction, AntTrailFitness,
 };
 use thrillseeker_lib::Team;
 
@@ -18,9 +18,8 @@ fn main() {
 
     let model_contents = fs::read_to_string(path).expect("Could not read file");
 
-    let team: Team<AntTrailAction> = serde_json::from_str(&model_contents).unwrap();
-
-    // TODO reuse logic from ant_trail_problem
+    let team: Team<AntTrailAction, AntTrailFitness> =
+        serde_json::from_str(&model_contents).unwrap();
 
     let params = ant_trail_parameters();
 
@@ -30,7 +29,8 @@ fn main() {
         println!();
     };
 
-    let food_gathered = simulate_ant_trail(&team, &params, Some(draw_grid));
+    let (food_gathered, steps) = simulate_ant_trail(&team, &params, Some(draw_grid));
 
     println!("Food gathered: {}", food_gathered);
+    println!("Steps: {}", steps);
 }

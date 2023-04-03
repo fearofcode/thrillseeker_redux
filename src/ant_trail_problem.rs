@@ -1,10 +1,10 @@
-use std::cmp::Ordering;
 use crate::ant_trail::{
     Direction, Grid, WorldPosition, LOS_ALTOS_PERFECT_SCORE, MAXIMUM_MOVEMENTS,
 };
 use crate::{Function, ProblemParameters, RunParameters, Team};
 use fastrand::Rng;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 
@@ -14,10 +14,10 @@ pub enum AntTrailAction {
     Down,
     Left,
     Right,
-    UpRight,
-    DownRight,
-    UpLeft,
-    DownLeft
+    // UpRight,
+    // DownRight,
+    // UpLeft,
+    // DownLeft,
 }
 
 pub fn index_to_ant_trail_action(index: usize) -> AntTrailAction {
@@ -26,10 +26,10 @@ pub fn index_to_ant_trail_action(index: usize) -> AntTrailAction {
         1 => AntTrailAction::Down,
         2 => AntTrailAction::Left,
         3 => AntTrailAction::Right,
-        4 => AntTrailAction::UpRight,
-        5 => AntTrailAction::DownRight,
-        6 => AntTrailAction::UpLeft,
-        7 => AntTrailAction::DownLeft,
+        // 4 => AntTrailAction::UpRight,
+        // 5 => AntTrailAction::DownRight,
+        // 6 => AntTrailAction::UpLeft,
+        // 7 => AntTrailAction::DownLeft,
         _ => panic!(),
     }
 }
@@ -41,15 +41,15 @@ impl fmt::Display for AntTrailAction {
             AntTrailAction::Down => write!(f, "Down"),
             AntTrailAction::Left => write!(f, "Left"),
             AntTrailAction::Right => write!(f, "Right"),
-            AntTrailAction::UpRight => write!(f, "UpRight"),
-            AntTrailAction::DownRight => write!(f, "DownRight"),
-            AntTrailAction::UpLeft => write!(f, "UpLeft"),
-            AntTrailAction::DownLeft => write!(f, "DownLeft"),
+            // AntTrailAction::UpRight => write!(f, "UpRight"),
+            // AntTrailAction::DownRight => write!(f, "DownRight"),
+            // AntTrailAction::UpLeft => write!(f, "UpLeft"),
+            // AntTrailAction::DownLeft => write!(f, "DownLeft"),
         }
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug, Copy, Clone)]
 pub struct AntTrailFitness {
     pub food_remaining: usize,
     pub steps_taken: usize,
@@ -79,7 +79,7 @@ impl Ord for AntTrailFitness {
             return Ordering::Equal;
         }
 
-        return Ordering::Greater;
+        Ordering::Greater
     }
 }
 
@@ -91,7 +91,10 @@ pub fn ant_trail_individual_error(
 ) -> AntTrailFitness {
     let (food_gathered, steps_taken) = simulate_ant_trail(team, params, None);
 
-    AntTrailFitness { food_remaining: (LOS_ALTOS_PERFECT_SCORE - food_gathered), steps_taken: steps_taken }
+    AntTrailFitness {
+        food_remaining: (LOS_ALTOS_PERFECT_SCORE - food_gathered),
+        steps_taken,
+    }
 }
 
 pub fn simulate_ant_trail(
@@ -172,18 +175,18 @@ pub fn simulate_ant_trail(
             AntTrailAction::Right => {
                 pos.facing = Direction::Right;
             }
-            AntTrailAction::UpRight => {
-                pos.facing = Direction::UpRight;
-            },
-            AntTrailAction::DownRight => {
-                pos.facing = Direction::DownRight;
-            },
-            AntTrailAction::UpLeft => {
-                pos.facing = Direction::UpLeft;
-            },
-            AntTrailAction::DownLeft => {
-                pos.facing = Direction::DownLeft;
-            },
+            // AntTrailAction::UpRight => {
+            //     pos.facing = Direction::UpRight;
+            // }
+            // AntTrailAction::DownRight => {
+            //     pos.facing = Direction::DownRight;
+            // }
+            // AntTrailAction::UpLeft => {
+            //     pos.facing = Direction::UpLeft;
+            // }
+            // AntTrailAction::DownLeft => {
+            //     pos.facing = Direction::DownLeft;
+            // }
         }
 
         pos.one_move();
@@ -208,37 +211,40 @@ pub fn simulate_ant_trail(
 pub fn ant_trail_parameters() -> ProblemParameters<AntTrailFitness> {
     ProblemParameters {
         input_count: 8,
-        register_count: 8,
+        register_count: 4,
         population_size: 50000,
-        population_to_delete: 25000,
+        population_to_delete: 45000,
         max_program_size: 64,
         min_initial_program_size: 1,
-        max_initial_program_size: 32,
+        max_initial_program_size: 8,
         // Up, Down, Left, Right
-        action_count: 8,
-        max_initial_team_size: 16,
+        action_count: 4,
+        max_initial_team_size: 8,
         max_team_size: 32,
         tournament_size: 4,
         generation_count: 1000,
         generation_stagnation_limit: 25,
         run_count: 1,
-        p_delete_instruction: 0.1,
+        p_delete_instruction: 0.7,
         p_add_instruction: 0.7,
-        p_swap_instructions: 0.1,
-        p_change_destination: 0.5,
-        p_change_function: 0.1,
-        p_change_input: 0.1,
-        p_flip_input: 0.1,
-        p_change_action: 0.1,
-        p_delete_program: 0.1,
-        p_add_program: 0.5,
-        fitness_threshold: AntTrailFitness { food_remaining: 0, steps_taken: MAXIMUM_MOVEMENTS },
+        p_swap_instructions: 0.7,
+        p_change_destination: 0.7,
+        p_change_function: 0.7,
+        p_change_input: 0.7,
+        p_flip_input: 0.7,
+        p_change_action: 0.7,
+        p_delete_program: 0.7,
+        p_add_program: 0.7,
+        fitness_threshold: AntTrailFitness {
+            food_remaining: 0,
+            steps_taken: 300,
+        },
         legal_functions: vec![
             // Function::Relu,
-            Function::Plus,
-            Function::Minus,
-            Function::Times,
-            Function::Divide,
+            // Function::Plus,
+            // Function::Minus,
+            // Function::Times,
+            // Function::Divide,
             // Function::Square,
             // Function::Sin,
             // Function::Log,
@@ -246,12 +252,12 @@ pub fn ant_trail_parameters() -> ProblemParameters<AntTrailFitness> {
             Function::Or,
             Function::Not,
             Function::Xor,
-            Function::Min,
-            Function::Max,
-            Function::Greater,
-            Function::Less,
+            // Function::Min,
+            // Function::Max,
+            // Function::Greater,
+            // Function::Less,
             Function::IfThenElse,
-            Function::Copy,
+            // Function::Copy,
         ],
         constant_list: vec![0.0, 1.0, -1.0],
         feature_names: vec![
@@ -271,7 +277,10 @@ pub fn ant_trail_runs(
     seed: u64,
     dump: bool,
     rng: &mut Rng,
-) -> (Vec<Team<AntTrailAction, AntTrailFitness>>, ProblemParameters<AntTrailFitness>) {
+) -> (
+    Vec<Team<AntTrailAction, AntTrailFitness>>,
+    ProblemParameters<AntTrailFitness>,
+) {
     let mut id_counter: u64 = 1;
 
     let mut best_teams: Vec<Team<AntTrailAction, AntTrailFitness>> = vec![];

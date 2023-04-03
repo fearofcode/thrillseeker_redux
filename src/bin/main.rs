@@ -41,9 +41,10 @@ fn setup() -> (u64, bool, Rng) {
 
 fn print_best_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
-    best_teams: &[Team<A>],
-    params: &ProblemParameters,
+    best_teams: &[Team<A, Fitness>],
+    params: &ProblemParameters<Fitness>,
 ) {
     println!("Best teams:");
 

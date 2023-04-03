@@ -1,7 +1,7 @@
-use std::cmp::Ordering;
 use crate::{Function, ProblemParameters, RunParameters, Team};
 use fastrand::Rng;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
@@ -244,7 +244,10 @@ pub fn acrobot_runs(
     seed: u64,
     dump: bool,
     rng: &mut Rng,
-) -> (Vec<Team<AcrobotAction, AcrobotFitness>>, ProblemParameters<AcrobotFitness>) {
+) -> (
+    Vec<Team<AcrobotAction, AcrobotFitness>>,
+    ProblemParameters<AcrobotFitness>,
+) {
     let mut id_counter: u64 = 1;
 
     let mut best_teams: Vec<Team<AcrobotAction, AcrobotFitness>> = vec![];
@@ -276,7 +279,9 @@ pub fn acrobot_runs(
         p_change_action: 0.1,
         p_delete_program: 0.5,
         p_add_program: 0.5,
-        fitness_threshold: AcrobotFitness { steps: 45 * 100 + 1 },
+        fitness_threshold: AcrobotFitness {
+            steps: 45 * 100 + 1,
+        },
         legal_functions: vec![
             Function::Relu,
             Function::Plus,

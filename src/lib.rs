@@ -33,7 +33,9 @@ const EVALUATE_PARALLEL: bool = true;
 // problem independent so the slight waste in space in each instruction is something that can be dealt with later
 const MAX_ARITY: usize = 3;
 
-pub struct ProblemParameters<Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync> {
+pub struct ProblemParameters<
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> {
     pub input_count: usize,
     pub register_count: usize,
     pub population_size: usize,
@@ -65,8 +67,9 @@ pub struct ProblemParameters<Fitness: Debug + Ord + PartialOrd + Eq + PartialEq 
 }
 
 impl<
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync>
-ProblemParameters<Fitness> {
+        Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    > ProblemParameters<Fitness>
+{
     fn deletion_point(&self) -> usize {
         self.population_size - self.population_to_delete
     }
@@ -334,7 +337,12 @@ impl Hash for Instruction {
     }
 }
 
-fn random_instruction<Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync>(rng: &mut Rng, params: &ProblemParameters<Fitness>) -> Instruction {
+fn random_instruction<
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    rng: &mut Rng,
+    params: &ProblemParameters<Fitness>,
+) -> Instruction {
     let mut instruction = Instruction {
         destination: 0,
         operands: [0; MAX_ARITY],
@@ -367,7 +375,9 @@ fn random_instruction<Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash 
     instruction
 }
 
-fn active_instructions_from_index<Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync>(
+fn active_instructions_from_index<
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
     instructions: &[Instruction],
     starting_index: usize,
     params: &ProblemParameters<Fitness>,
@@ -426,7 +436,6 @@ struct Program<
 
 impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync
     > Program<A>
 {
     fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
@@ -453,7 +462,12 @@ impl<
         self.introns.clear();
     }
 
-    fn mark_introns(&mut self, params: &ProblemParameters<Fitness>) {
+    fn mark_introns<
+        Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    >(
+        &mut self,
+        params: &ProblemParameters<Fitness>,
+    ) {
         self.restore_introns();
 
         // remark indexes
@@ -570,7 +584,7 @@ impl<
 
 fn evaluate_program<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
     program: &Program<A>,
     fitness_cases: &[Vec<f32>],
@@ -1096,7 +1110,7 @@ fn evaluate_program<
 
 fn size_fair_dependent_instruction_crossover<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
     parent1: &mut Program<A>,
     parent2: &mut Program<A>,
@@ -1196,7 +1210,7 @@ fn size_fair_dependent_instruction_crossover<
 
 fn mutate_program<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
     program: &mut Program<A>,
     team_actions: &[A],
@@ -1316,7 +1330,7 @@ pub struct Team<
 
 impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+        Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Team<A, Fitness>
 {
     pub fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
@@ -1366,7 +1380,7 @@ impl<
 
 impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+        Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > PartialEq for Team<A, Fitness>
 {
     fn eq(&self, other: &Self) -> bool {
@@ -1383,14 +1397,14 @@ impl<
 
 impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+        Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Eq for Team<A, Fitness>
 {
 }
 
 impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+        Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > fmt::Display for Team<A, Fitness>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -1710,7 +1724,8 @@ fn team_crossover<
         .collect();
 }
 
-type IndividualErrorFunction<A, Fitness> = fn(&Team<A, Fitness>, &[Vec<f32>], &ProblemParameters<Fitness>, &[A]) -> Fitness;
+type IndividualErrorFunction<A, Fitness> =
+    fn(&Team<A, Fitness>, &[Vec<f32>], &ProblemParameters<Fitness>, &[A]) -> Fitness;
 
 fn evaluate_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
@@ -1939,8 +1954,12 @@ pub fn get_seed_value() -> u64 {
         .as_millis() as u64
 }
 
-fn fitness_case_with_constants<Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync>
-(inputs: Vec<f32>, params: &ProblemParameters<Fitness>) -> Vec<f32> {
+fn fitness_case_with_constants<
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    inputs: Vec<f32>,
+    params: &ProblemParameters<Fitness>,
+) -> Vec<f32> {
     let mut output = vec![0.0; params.fitness_case_size()];
 
     for (i, input) in inputs.iter().enumerate() {
