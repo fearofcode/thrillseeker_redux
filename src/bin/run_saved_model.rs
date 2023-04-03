@@ -1,7 +1,9 @@
-use std::{env, fs, process, thread};
 use std::time::Duration;
+use std::{env, fs, process, thread};
 use thrillseeker_lib::ant_trail::{Grid, WorldPosition};
-use thrillseeker_lib::ant_trail_problem::{ant_trail_parameters, AntTrailAction, simulate_ant_trail};
+use thrillseeker_lib::ant_trail_problem::{
+    ant_trail_parameters, simulate_ant_trail, AntTrailAction,
+};
 use thrillseeker_lib::Team;
 
 fn main() {
@@ -24,7 +26,7 @@ fn main() {
 
     let draw_grid: fn(Grid, WorldPosition) = |grid, pos| {
         grid.draw_with_position(pos);
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(100));
         println!();
     };
 

@@ -1,7 +1,10 @@
-use crate::{Function, ProblemParameters, Team};
+use std::cmp::Ordering;
+use crate::{Function, ProblemParameters, RunParameters, Team};
 use fastrand::Rng;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use serde::{Serialize, Deserialize};
+use std::fmt::{Debug, Display, Formatter};
+use std::hash::Hash;
 
 #[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AcrobotAction {
@@ -147,12 +150,35 @@ fn runge_kutta(y0: [f32; 5], t: [f32; 2]) -> [[f32; 5]; 2] {
     y_out
 }
 
+#[derive(Hash, Eq, PartialEq, Debug, Copy, Clone)]
+pub struct AcrobotFitness {
+    pub steps: usize,
+}
+
+impl PartialOrd<Self> for AcrobotFitness {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AcrobotFitness {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.steps.cmp(&other.steps)
+    }
+}
+
+impl Display for AcrobotFitness {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.steps)
+    }
+}
+
 pub fn acrobot_individual_error(
-    team: &Team<AcrobotAction>,
+    team: &Team<AcrobotAction, AcrobotFitness>,
     fitness_cases: &[Vec<f32>],
-    params: &ProblemParameters,
+    params: &ProblemParameters<AcrobotFitness>,
     _unused_labels: &[AcrobotAction],
-) -> f32 {
+) -> AcrobotFitness {
     let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
 
     let mut total_steps = 0;
@@ -211,13 +237,17 @@ pub fn acrobot_individual_error(
             .collect();
     }
 
-    total_steps as f32
+    AcrobotFitness { steps: total_steps }
 }
 
-pub fn acrobot_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AcrobotAction>>, ProblemParameters) {
+pub fn acrobot_runs(
+    seed: u64,
+    dump: bool,
+    rng: &mut Rng,
+) -> (Vec<Team<AcrobotAction, AcrobotFitness>>, ProblemParameters<AcrobotFitness>) {
     let mut id_counter: u64 = 1;
 
-    let mut best_teams: Vec<Team<AcrobotAction>> = vec![];
+    let mut best_teams: Vec<Team<AcrobotAction, AcrobotFitness>> = vec![];
 
     let mut fitness_cases: Vec<Vec<f32>> = vec![];
 
@@ -246,7 +276,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AcrobotAc
         p_change_action: 0.1,
         p_delete_program: 0.5,
         p_add_program: 0.5,
-        fitness_threshold: 45.0 * (100.0) + 1.0,
+        fitness_threshold: AcrobotFitness { steps: 45 * 100 + 1 },
         legal_functions: vec![
             Function::Relu,
             Function::Plus,
@@ -268,7 +298,7 @@ pub fn acrobot_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AcrobotAc
             Function::Copy,
         ],
         constant_list: vec![0.0],
-        feature_names: vec!["x1", "v1", "x2", "v2"]
+        feature_names: vec!["x1", "v1", "x2", "v2"],
     };
 
     for _ in 0..100 {
@@ -284,18 +314,20 @@ pub fn acrobot_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AcrobotAc
     }
 
     for run in 1..=acrobot_parameters.run_count {
-        best_teams.push(crate::one_run(
+        let mut run_parameters = RunParameters {
             run,
             rng,
-            &fitness_cases,
-            &[],
-            &acrobot_parameters,
-            acrobot_individual_error,
-            index_to_acrobot_action,
-            &mut id_counter,
+            fitness_cases: &fitness_cases,
+            labels: &[],
+            params: &acrobot_parameters,
+            individual_error: acrobot_individual_error,
+            index_to_program_action: index_to_acrobot_action,
+            id_counter: &mut id_counter,
             dump,
             seed,
-        ));
+        };
+
+        best_teams.push(crate::one_run(&mut run_parameters));
     }
     (best_teams, acrobot_parameters)
 }

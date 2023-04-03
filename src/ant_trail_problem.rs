@@ -1,8 +1,12 @@
-use crate::{Function, ProblemParameters, Team};
+use std::cmp::Ordering;
+use crate::ant_trail::{
+    Direction, Grid, WorldPosition, LOS_ALTOS_PERFECT_SCORE, MAXIMUM_MOVEMENTS,
+};
+use crate::{Function, ProblemParameters, RunParameters, Team};
 use fastrand::Rng;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use crate::ant_trail::{Direction, Grid, MAXIMUM_MOVEMENTS, LOS_ALTOS_PERFECT_SCORE, WorldPosition};
-use serde::{Serialize, Deserialize};
+use std::fmt::{Display, Formatter};
 
 #[derive(Serialize, Deserialize, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum AntTrailAction {
@@ -45,19 +49,56 @@ impl fmt::Display for AntTrailAction {
     }
 }
 
-pub fn ant_trail_individual_error(
-    team: &Team<AntTrailAction>,
-    _fitness_cases: &[Vec<f32>],
-    params: &ProblemParameters,
-    _unused_labels: &[AntTrailAction],
-) -> f32 {
-    let food_gathered = simulate_ant_trail(team, params, None);
-
-    (LOS_ALTOS_PERFECT_SCORE - food_gathered) as f32
+#[derive(Hash, Eq, PartialEq, Debug, Copy, Clone)]
+pub struct AntTrailFitness {
+    pub food_remaining: usize,
+    pub steps_taken: usize,
 }
 
-pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameters,
-                      callback: Option<fn(Grid, WorldPosition)>) -> usize {
+impl Display for AntTrailFitness {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.food_remaining, self.steps_taken)
+    }
+}
+
+impl PartialOrd<Self> for AntTrailFitness {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AntTrailFitness {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.food_remaining < other.food_remaining {
+            return Ordering::Less;
+        }
+        if self.food_remaining == other.food_remaining && self.steps_taken < other.steps_taken {
+            return Ordering::Less;
+        }
+        if self.food_remaining == other.food_remaining && self.steps_taken == other.steps_taken {
+            return Ordering::Equal;
+        }
+
+        return Ordering::Greater;
+    }
+}
+
+pub fn ant_trail_individual_error(
+    team: &Team<AntTrailAction, AntTrailFitness>,
+    _fitness_cases: &[Vec<f32>],
+    params: &ProblemParameters<AntTrailFitness>,
+    _unused_labels: &[AntTrailAction],
+) -> AntTrailFitness {
+    let (food_gathered, steps_taken) = simulate_ant_trail(team, params, None);
+
+    AntTrailFitness { food_remaining: (LOS_ALTOS_PERFECT_SCORE - food_gathered), steps_taken: steps_taken }
+}
+
+pub fn simulate_ant_trail(
+    team: &Team<AntTrailAction, AntTrailFitness>,
+    params: &ProblemParameters<AntTrailFitness>,
+    callback: Option<fn(Grid, WorldPosition)>,
+) -> (usize, usize) {
     let mut pos = WorldPosition::new();
 
     let mut movement_count = 0;
@@ -71,31 +112,66 @@ pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameter
     }
 
     while movement_count < MAXIMUM_MOVEMENTS {
-        let state: Vec<f32> = vec![
-            if grid.is_food_in_direction(pos, Direction::Up) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::Down) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::Left) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::Right) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::UpRight) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::DownRight) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::UpLeft) { 1.0 } else { 0.0 },
-            if grid.is_food_in_direction(pos, Direction::DownLeft) { 1.0 } else { 0.0 }
+        let mut state: Vec<f32> = vec![
+            if grid.is_food_in_direction(pos, Direction::Up) {
+                1.0
+            } else {
+                0.0
+            },
+            if grid.is_food_in_direction(pos, Direction::Down) {
+                1.0
+            } else {
+                0.0
+            },
+            if grid.is_food_in_direction(pos, Direction::Left) {
+                1.0
+            } else {
+                0.0
+            },
+            if grid.is_food_in_direction(pos, Direction::Right) {
+                1.0
+            } else {
+                0.0
+            },
+            if grid.is_food_in_direction(pos, Direction::UpRight) {
+                1.0
+            } else {
+                0.0
+            },
+            if grid.is_food_in_direction(pos, Direction::DownRight) {
+                1.0
+            } else {
+                0.0
+            },
+            if grid.is_food_in_direction(pos, Direction::UpLeft) {
+                1.0
+            } else {
+                0.0
+            },
+            if grid.is_food_in_direction(pos, Direction::DownLeft) {
+                1.0
+            } else {
+                0.0
+            },
         ];
+        for c in params.constant_list.iter() {
+            state.push(*c);
+        }
         let outputs = crate::evaluate_team(team, &[state], params);
         let output = outputs[0];
         match output {
             AntTrailAction::Up => {
                 pos.facing = Direction::Up;
-            },
+            }
             AntTrailAction::Down => {
                 pos.facing = Direction::Down;
-            },
+            }
             AntTrailAction::Left => {
                 pos.facing = Direction::Left;
-            },
+            }
             AntTrailAction::Right => {
                 pos.facing = Direction::Right;
-            },
+            }
             AntTrailAction::UpRight => {
                 pos.facing = Direction::UpRight;
             },
@@ -115,48 +191,48 @@ pub fn simulate_ant_trail(team: &Team<AntTrailAction>, params: &ProblemParameter
         if grid.food_at_position(pos) {
             food_gathered += 1;
             if food_gathered >= LOS_ALTOS_PERFECT_SCORE {
-                return 0;
+                return (food_gathered, movement_count);
             }
             grid.remove_food_at_position(pos);
         }
 
-        if callback.is_some() {
-            callback.unwrap()(grid, pos);
+        if let Some(cb) = callback {
+            cb(grid, pos);
         }
 
         movement_count += 1;
     }
-    food_gathered
+    (food_gathered, movement_count)
 }
 
-pub fn ant_trail_parameters() -> ProblemParameters {
-    return ProblemParameters {
-        input_count: 4,
-        register_count: 4,
-        population_size: 5000,
-        population_to_delete: 4500,
+pub fn ant_trail_parameters() -> ProblemParameters<AntTrailFitness> {
+    ProblemParameters {
+        input_count: 8,
+        register_count: 8,
+        population_size: 50000,
+        population_to_delete: 25000,
         max_program_size: 64,
         min_initial_program_size: 1,
         max_initial_program_size: 32,
-        // Up, Down, Left, Right, UpLeft, DownLeft, UpRight, DownRight
+        // Up, Down, Left, Right
         action_count: 8,
-        max_initial_team_size: 24,
-        max_team_size: 64,
+        max_initial_team_size: 16,
+        max_team_size: 32,
         tournament_size: 4,
         generation_count: 1000,
         generation_stagnation_limit: 25,
         run_count: 1,
-        p_delete_instruction: 0.7,
+        p_delete_instruction: 0.1,
         p_add_instruction: 0.7,
-        p_swap_instructions: 0.7,
-        p_change_destination: 0.7,
+        p_swap_instructions: 0.1,
+        p_change_destination: 0.5,
         p_change_function: 0.1,
         p_change_input: 0.1,
         p_flip_input: 0.1,
         p_change_action: 0.1,
-        p_delete_program: 0.5,
+        p_delete_program: 0.1,
         p_add_program: 0.5,
-        fitness_threshold: 0.0,
+        fitness_threshold: AntTrailFitness { food_remaining: 0, steps_taken: MAXIMUM_MOVEMENTS },
         legal_functions: vec![
             // Function::Relu,
             Function::Plus,
@@ -170,39 +246,53 @@ pub fn ant_trail_parameters() -> ProblemParameters {
             Function::Or,
             Function::Not,
             Function::Xor,
-            // Function::Min,
-            // Function::Max,
+            Function::Min,
+            Function::Max,
             Function::Greater,
             Function::Less,
             Function::IfThenElse,
-            // Function::Copy,
+            Function::Copy,
         ],
         constant_list: vec![0.0, 1.0, -1.0],
-        feature_names: vec!["food-at-up", "food-at-down", "food-at-left", "food-at-right",
-                            "food-at-up-right", "food-at-down-right", "food-at-up-left", "food-at-down-left"]
-    };
-
+        feature_names: vec![
+            "food-at-up",
+            "food-at-down",
+            "food-at-left",
+            "food-at-right",
+            "food-at-up-right",
+            "food-at-down-right",
+            "food-at-up-left",
+            "food-at-down-left",
+        ],
+    }
 }
-pub fn ant_trail_runs(seed: u64, dump: bool, rng: &mut Rng) -> (Vec<Team<AntTrailAction>>, ProblemParameters) {
+
+pub fn ant_trail_runs(
+    seed: u64,
+    dump: bool,
+    rng: &mut Rng,
+) -> (Vec<Team<AntTrailAction, AntTrailFitness>>, ProblemParameters<AntTrailFitness>) {
     let mut id_counter: u64 = 1;
 
-    let mut best_teams: Vec<Team<AntTrailAction>> = vec![];
+    let mut best_teams: Vec<Team<AntTrailAction, AntTrailFitness>> = vec![];
 
     let params = ant_trail_parameters();
 
     for run in 1..=params.run_count {
-        best_teams.push(crate::one_run(
+        let mut run_parameters: RunParameters<AntTrailAction, AntTrailFitness> = RunParameters {
             run,
             rng,
-            &[],
-            &[],
-            &params,
-            ant_trail_individual_error,
-            index_to_ant_trail_action,
-            &mut id_counter,
+            fitness_cases: &[],
+            labels: &[],
+            params: &params,
+            individual_error: ant_trail_individual_error,
+            index_to_program_action: index_to_ant_trail_action,
+            id_counter: &mut id_counter,
             dump,
             seed,
-        ));
+        };
+
+        best_teams.push(crate::one_run(&mut run_parameters));
     }
     (best_teams, params)
 }
