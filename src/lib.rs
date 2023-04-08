@@ -1,12 +1,13 @@
 pub mod acrobot;
 pub mod ant_trail;
 pub mod ant_trail_problem;
+mod lsh;
 
 use fastrand::Rng;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
@@ -39,7 +40,9 @@ pub struct ProblemParameters<
     pub input_count: usize,
     pub register_count: usize,
     pub population_size: usize,
-    pub population_to_delete: usize,
+    pub keep_by_fitness: usize,
+    pub keep_by_novelty: usize,
+    pub select_by_novelty: usize,
     pub max_program_size: usize,
     pub min_initial_program_size: usize,
     pub max_initial_program_size: usize,
@@ -71,7 +74,7 @@ impl<
     > ProblemParameters<Fitness>
 {
     fn deletion_point(&self) -> usize {
-        self.population_size - self.population_to_delete
+        self.keep_by_novelty + self.keep_by_fitness
     }
 
     fn fitness_case_size(&self) -> usize {
@@ -1315,6 +1318,8 @@ fn mutate_program<
     program.id = *counter;
 }
 
+type BehaviorDescriptor = String;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
@@ -1322,6 +1327,8 @@ pub struct Team<
 > {
     programs: Vec<Program<A>>,
     pub fitness: Option<Fitness>,
+    behavior_descriptor: Option<BehaviorDescriptor>,
+    novelty: Option<f32>,
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
@@ -1447,6 +1454,8 @@ fn initialize_teams<
         let mut team = Team {
             programs: vec![],
             fitness: None,
+            novelty: None,
+            behavior_descriptor: None,
             id: 0,
             parent1_id: 0,
             parent2_id: 0,
@@ -1566,7 +1575,25 @@ pub fn evaluate_team<
         .collect()
 }
 
-fn tournament_selection<
+#[derive(Debug, Eq, PartialEq)]
+struct ArchiveEntry<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> {
+    team: Team<A, Fitness>,
+    generation_added: usize,
+}
+
+#[derive(Debug)]
+struct Archive<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> {
+    entries: HashMap<usize, ArchiveEntry<A, Fitness>>,
+    distance_cache: HashMap<(usize, usize), f32>,
+}
+
+fn tournament_selection_fitness<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
@@ -1581,6 +1608,33 @@ fn tournament_selection<
                 .fitness
                 .unwrap()
                 .partial_cmp(&teams[*index2].fitness.unwrap())
+                .unwrap()
+            {
+                Ordering::Equal => teams[*index1]
+                    .active_instruction_count()
+                    .partial_cmp(&teams[*index2].active_instruction_count())
+                    .unwrap(),
+                other => other,
+            }
+        })
+        .unwrap()
+}
+
+fn tournament_selection_novelty<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    teams: &[Team<A, Fitness>],
+    rng: &mut Rng,
+    params: &ProblemParameters<Fitness>,
+) -> usize {
+    (0..params.tournament_size)
+        .map(|_| rng.usize(..params.deletion_point()))
+        .max_by(|index1, index2| {
+            match teams[*index1]
+                .novelty
+                .unwrap()
+                .partial_cmp(&teams[*index2].novelty.unwrap())
                 .unwrap()
             {
                 Ordering::Equal => teams[*index1]
@@ -1724,8 +1778,12 @@ fn team_crossover<
         .collect();
 }
 
-type IndividualErrorFunction<A, Fitness> =
-    fn(&Team<A, Fitness>, &[Vec<f32>], &ProblemParameters<Fitness>, &[A]) -> Fitness;
+type IndividualErrorFunction<A, Fitness> = fn(
+    &Team<A, Fitness>,
+    &[Vec<f32>],
+    &ProblemParameters<Fitness>,
+    &[A],
+) -> (Fitness, BehaviorDescriptor);
 
 fn evaluate_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
@@ -1734,20 +1792,25 @@ fn evaluate_teams<
     teams: &mut Vec<Team<A, Fitness>>,
     fitness_cases: &[Vec<f32>],
     labels: &[A],
-    individual_error: IndividualErrorFunction<A, Fitness>,
+    individual_output: IndividualErrorFunction<A, Fitness>,
     params: &ProblemParameters<Fitness>,
 ) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
             // tracking skipped evaluations the way we do in c++ code is not very helpful now
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
+                let output = individual_output(team, fitness_cases, params, labels);
+                team.fitness = Some(output.0);
+                team.behavior_descriptor = Some(output.1);
             }
         });
+        // todo archive entries and compute novelty stores here
     } else {
         for team in teams.iter_mut() {
             if team.fitness.is_none() {
-                team.fitness = Some(individual_error(team, fitness_cases, params, labels));
+                let output = individual_output(team, fitness_cases, params, labels);
+                team.fitness = Some(output.0);
+                team.behavior_descriptor = Some(output.1);
             }
         }
     }
@@ -1762,8 +1825,8 @@ struct RunParameters<
     rng: &'a mut Rng,
     fitness_cases: &'a [Vec<f32>],
     labels: &'a [A],
-    params: &'a ProblemParameters<Fitness>,
-    individual_error: IndividualErrorFunction<A, Fitness>,
+    problem_parameters: &'a ProblemParameters<Fitness>,
+    individual_output: IndividualErrorFunction<A, Fitness>,
     index_to_program_action: fn(usize) -> A,
     id_counter: &'a mut u64,
     dump: bool,
@@ -1783,7 +1846,7 @@ fn one_run<
     let mut teams = initialize_teams(
         run_parameters.rng,
         run_parameters.id_counter,
-        run_parameters.params,
+        run_parameters.problem_parameters,
         run_parameters.index_to_program_action,
     );
     println!("Done.");
@@ -1794,14 +1857,14 @@ fn one_run<
 
     let mut stagnation_count = 0;
 
-    for generation in 1..=run_parameters.params.generation_count {
+    for generation in 1..=run_parameters.problem_parameters.generation_count {
         println!("Starting generation {}", generation);
         evaluate_teams(
             &mut teams,
             run_parameters.fitness_cases,
             run_parameters.labels,
-            run_parameters.individual_error,
-            run_parameters.params,
+            run_parameters.individual_output,
+            run_parameters.problem_parameters,
         );
 
         teams.sort_by(|team1, team2| {
@@ -1845,7 +1908,7 @@ fn one_run<
                 println!("{}", team);
             }
 
-            if team.fitness.unwrap() <= run_parameters.params.fitness_threshold {
+            if team.fitness.unwrap() <= run_parameters.problem_parameters.fitness_threshold {
                 optimal_team_found = true;
                 println!(
                     "Optimal found in run #{}, generation {}, with fitness {}:",
@@ -1869,31 +1932,43 @@ fn one_run<
             println!("Stagnation count has increased to {}", stagnation_count);
         }
 
-        if stagnation_count > run_parameters.params.generation_stagnation_limit {
+        if stagnation_count
+            > run_parameters
+                .problem_parameters
+                .generation_stagnation_limit
+        {
             println!(
                 "Stagnation count exceeds limit of {}, exiting",
-                run_parameters.params.generation_stagnation_limit
+                run_parameters
+                    .problem_parameters
+                    .generation_stagnation_limit
             );
             break;
         }
 
         // TODO calculate and display min/max/median fitness
 
-        teams.truncate(run_parameters.params.deletion_point());
-        assert_eq!(teams.len(), run_parameters.params.deletion_point());
+        let mut next_generation = teams.clone();
+        next_generation.truncate(run_parameters.problem_parameters.deletion_point());
 
-        while teams.len() < run_parameters.params.population_size {
+        while next_generation.len() < run_parameters.problem_parameters.population_size {
             loop {
-                let parent1_index =
-                    tournament_selection(&teams, run_parameters.rng, run_parameters.params);
+                let parent1_index = tournament_selection_fitness(
+                    &teams,
+                    run_parameters.rng,
+                    run_parameters.problem_parameters,
+                );
                 let mut parent1 = teams[parent1_index].clone();
 
                 let previous_team = parent1.clone();
 
                 parent1.restore_introns();
 
-                let parent2_index =
-                    tournament_selection(&teams, run_parameters.rng, run_parameters.params);
+                let parent2_index = tournament_selection_fitness(
+                    &teams,
+                    run_parameters.rng,
+                    run_parameters.problem_parameters,
+                );
                 let mut parent2 = teams[parent2_index].clone();
 
                 parent2.restore_introns();
@@ -1906,14 +1981,14 @@ fn one_run<
                         &mut parent1,
                         &mut parent2,
                         run_parameters.rng,
-                        run_parameters.params,
+                        run_parameters.problem_parameters,
                     );
                 } else {
                     team_crossover(
                         &mut parent2,
                         &mut parent1,
                         run_parameters.rng,
-                        run_parameters.params,
+                        run_parameters.problem_parameters,
                     );
                     parent1 = parent2.clone();
                 }
@@ -1923,10 +1998,10 @@ fn one_run<
                     &mut parent2,
                     run_parameters.rng,
                     run_parameters.id_counter,
-                    run_parameters.params,
+                    run_parameters.problem_parameters,
                     run_parameters.index_to_program_action,
                 );
-                parent1.mark_introns(run_parameters.params);
+                parent1.mark_introns(run_parameters.problem_parameters);
 
                 if previous_team != parent1 {
                     *run_parameters.id_counter += 1;
@@ -1935,11 +2010,12 @@ fn one_run<
                     parent1.parent2_id = parent2_id;
                     parent1.fitness = None;
                     // only add new individuals
-                    teams.push(parent1);
+                    next_generation.push(parent1);
                     break;
                 }
             }
         }
+        teams = next_generation.clone();
     }
 
     println!("Done with run # {}", run_parameters.run);

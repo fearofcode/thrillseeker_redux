@@ -1,7 +1,7 @@
 use crate::ant_trail::{
     Direction, Grid, WorldPosition, LOS_ALTOS_PERFECT_SCORE, MAXIMUM_MOVEMENTS,
 };
-use crate::{Function, ProblemParameters, RunParameters, Team};
+use crate::{BehaviorDescriptor, Function, ProblemParameters, RunParameters, Team};
 use fastrand::Rng;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -83,25 +83,28 @@ impl Ord for AntTrailFitness {
     }
 }
 
-pub fn ant_trail_individual_error(
+pub fn ant_trail_individual_output(
     team: &Team<AntTrailAction, AntTrailFitness>,
     _fitness_cases: &[Vec<f32>],
     params: &ProblemParameters<AntTrailFitness>,
     _unused_labels: &[AntTrailAction],
-) -> AntTrailFitness {
-    let (food_gathered, steps_taken) = simulate_ant_trail(team, params, None);
+) -> (AntTrailFitness, BehaviorDescriptor) {
+    let (food_gathered, steps_taken, behavior) = simulate_ant_trail(team, params, None);
 
-    AntTrailFitness {
+    let fitness = AntTrailFitness {
         food_remaining: (LOS_ALTOS_PERFECT_SCORE - food_gathered),
         steps_taken,
-    }
+    };
+
+    (fitness, behavior)
 }
 
 pub fn simulate_ant_trail(
     team: &Team<AntTrailAction, AntTrailFitness>,
     params: &ProblemParameters<AntTrailFitness>,
     callback: Option<fn(Grid, WorldPosition)>,
-) -> (usize, usize) {
+) -> (usize, usize, BehaviorDescriptor) {
+    let mut moves = vec![];
     let mut pos = WorldPosition::new();
 
     let mut movement_count = 0;
@@ -162,19 +165,11 @@ pub fn simulate_ant_trail(
         }
         let outputs = crate::evaluate_team(team, &[state], params);
         let output = outputs[0];
-        match output {
-            AntTrailAction::Up => {
-                pos.facing = Direction::Up;
-            }
-            AntTrailAction::Down => {
-                pos.facing = Direction::Down;
-            }
-            AntTrailAction::Left => {
-                pos.facing = Direction::Left;
-            }
-            AntTrailAction::Right => {
-                pos.facing = Direction::Right;
-            }
+        moves.push(match output {
+            AntTrailAction::Up => "U",
+            AntTrailAction::Down => "D",
+            AntTrailAction::Left => "L",
+            AntTrailAction::Right => "R",
             // AntTrailAction::UpRight => {
             //     pos.facing = Direction::UpRight;
             // }
@@ -187,6 +182,32 @@ pub fn simulate_ant_trail(
             // AntTrailAction::DownLeft => {
             //     pos.facing = Direction::DownLeft;
             // }
+        });
+
+        match output {
+            AntTrailAction::Up => {
+                pos.facing = Direction::Up;
+            }
+            AntTrailAction::Down => {
+                pos.facing = Direction::Down;
+            }
+            AntTrailAction::Left => {
+                pos.facing = Direction::Left;
+            }
+            AntTrailAction::Right => {
+                pos.facing = Direction::Right;
+            } // AntTrailAction::UpRight => {
+              //     pos.facing = Direction::UpRight;
+              // }
+              // AntTrailAction::DownRight => {
+              //     pos.facing = Direction::DownRight;
+              // }
+              // AntTrailAction::UpLeft => {
+              //     pos.facing = Direction::UpLeft;
+              // }
+              // AntTrailAction::DownLeft => {
+              //     pos.facing = Direction::DownLeft;
+              // }
         }
 
         pos.one_move();
@@ -194,7 +215,7 @@ pub fn simulate_ant_trail(
         if grid.food_at_position(pos) {
             food_gathered += 1;
             if food_gathered >= LOS_ALTOS_PERFECT_SCORE {
-                return (food_gathered, movement_count);
+                return (food_gathered, movement_count, moves.join(""));
             }
             grid.remove_food_at_position(pos);
         }
@@ -205,7 +226,7 @@ pub fn simulate_ant_trail(
 
         movement_count += 1;
     }
-    (food_gathered, movement_count)
+    (food_gathered, movement_count, moves.join(""))
 }
 
 pub fn ant_trail_parameters() -> ProblemParameters<AntTrailFitness> {
@@ -213,7 +234,8 @@ pub fn ant_trail_parameters() -> ProblemParameters<AntTrailFitness> {
         input_count: 8,
         register_count: 4,
         population_size: 50000,
-        population_to_delete: 45000,
+        keep_by_fitness: 100,
+        keep_by_novelty: 1000,
         max_program_size: 64,
         min_initial_program_size: 1,
         max_initial_program_size: 8,
@@ -293,8 +315,8 @@ pub fn ant_trail_runs(
             rng,
             fitness_cases: &[],
             labels: &[],
-            params: &params,
-            individual_error: ant_trail_individual_error,
+            problem_parameters: &params,
+            individual_output: ant_trail_individual_output,
             index_to_program_action: index_to_ant_trail_action,
             id_counter: &mut id_counter,
             dump,

@@ -1,4 +1,4 @@
-use crate::{Function, ProblemParameters, RunParameters, Team};
+use crate::{BehaviorDescriptor, Function, ProblemParameters, RunParameters, Team};
 use fastrand::Rng;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -173,12 +173,12 @@ impl Display for AcrobotFitness {
     }
 }
 
-pub fn acrobot_individual_error(
+pub fn acrobot_individual_output(
     team: &Team<AcrobotAction, AcrobotFitness>,
     fitness_cases: &[Vec<f32>],
     params: &ProblemParameters<AcrobotFitness>,
     _unused_labels: &[AcrobotAction],
-) -> AcrobotFitness {
+) -> (AcrobotFitness, BehaviorDescriptor) {
     let mut steps: Vec<usize> = vec![0; fitness_cases.len()];
 
     let mut total_steps = 0;
@@ -186,6 +186,8 @@ pub fn acrobot_individual_error(
     let mut state = fitness_cases.to_owned();
 
     let episode_limit = 500;
+
+    let mut behavior = vec![];
 
     loop {
         if state.is_empty() {
@@ -202,6 +204,16 @@ pub fn acrobot_individual_error(
                 AcrobotAction::DoNothing => 0.0,
                 AcrobotAction::PositiveTorque => POSITIVE_TORQUE,
             };
+
+            // as fitness cases get deleted in differing orders with different behavior,
+            // the order of fitness cases in the descriptor will vary. however, due to using
+            // Jaccard similarity, the relative order of these should not match as long as the k-mers are there
+
+            behavior.push(match output {
+                AcrobotAction::NegativeTorque => "-",
+                AcrobotAction::DoNothing => "N",
+                AcrobotAction::PositiveTorque => "+",
+            });
 
             let augmented_state = [
                 current_state[0],
@@ -237,7 +249,8 @@ pub fn acrobot_individual_error(
             .collect();
     }
 
-    AcrobotFitness { steps: total_steps }
+    let behavior_string = behavior.join("");
+    (AcrobotFitness { steps: total_steps }, behavior_string)
 }
 
 pub fn acrobot_runs(
@@ -258,7 +271,8 @@ pub fn acrobot_runs(
         input_count: 4,
         register_count: 4,
         population_size: 5000,
-        population_to_delete: 4500,
+        keep_by_fitness: 500,
+        keep_by_novelty: 500,
         max_program_size: 32,
         min_initial_program_size: 1,
         max_initial_program_size: 8,
@@ -324,8 +338,8 @@ pub fn acrobot_runs(
             rng,
             fitness_cases: &fitness_cases,
             labels: &[],
-            params: &acrobot_parameters,
-            individual_error: acrobot_individual_error,
+            problem_parameters: &acrobot_parameters,
+            individual_output: acrobot_individual_output,
             index_to_program_action: index_to_acrobot_action,
             id_counter: &mut id_counter,
             dump,
