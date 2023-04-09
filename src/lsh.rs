@@ -58,12 +58,12 @@ fn string_shingles(document: &str) -> HashSet<u64> {
     shingles
 }
 
-fn jaccard_similarity(a: &HashSet<u64>, b: &HashSet<u64>) -> f32 {
+pub fn jaccard_similarity(a: &HashSet<u64>, b: &HashSet<u64>) -> f32 {
     let intersection_cardinality = a.intersection(b).count();
     (intersection_cardinality as f32) / ((a.len() + b.len() - intersection_cardinality) as f32)
 }
 
-fn nearest_neighbors(
+pub fn nearest_neighbors(
     query: &str,
     n: usize,
     matches: &HashSet<usize>,
@@ -86,9 +86,9 @@ fn nearest_neighbors(
     similar_matches
 }
 
-type Buckets = Vec<HashMap<u64, Vec<usize>>>;
+pub(crate) type Buckets = Vec<HashMap<u64, Vec<usize>>>;
 
-fn initialize_buckets() -> Buckets {
+pub fn initialize_buckets() -> Buckets {
     let mut buckets: Vec<HashMap<u64, Vec<usize>>> = vec![];
 
     let bucket_count = HASH_COUNT / BAND_SIZE;
@@ -98,24 +98,29 @@ fn initialize_buckets() -> Buckets {
     buckets
 }
 
-fn index_documents(documents: &mut Vec<String>, buckets: &mut Buckets) {
-    let chunked_min_hashes: Vec<Vec<(usize, u64)>> = documents
+pub struct Document {
+    contents: String,
+    id: usize,
+}
+
+pub fn index_documents(documents: &mut Vec<Document>, buckets: &mut Buckets) {
+    let chunked_min_hashes: Vec<(usize, Vec<(usize, u64)>)> = documents
         .par_iter()
-        .map(|document| chunked_min_hash(document))
+        .map(|document| (document.id, chunked_min_hash(&document.contents)))
         .collect();
 
-    for (document_index, chunked_min_hash) in chunked_min_hashes.iter().enumerate() {
+    for (document_id, min_hash) in chunked_min_hashes.iter() {
         for (bucket_index, min_hash) in chunked_min_hash.iter() {
             let bucket = &mut buckets[*bucket_index];
             bucket
                 .entry(*min_hash)
                 .or_insert(vec![])
-                .push(document_index);
+                .push(*document_id);
         }
     }
 }
 
-fn search_index(
+pub fn search_index(
     documents: &[String],
     buckets: &mut Buckets,
     query: &str,

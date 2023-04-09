@@ -1412,7 +1412,7 @@ impl<
 impl<
         A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
         Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    > fmt::Display for Team<A, Fitness>
+    > Display for Team<A, Fitness>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "Team ID #{}", self.id).unwrap();
@@ -1794,6 +1794,7 @@ fn evaluate_teams<
     labels: &[A],
     individual_output: IndividualErrorFunction<A, Fitness>,
     params: &ProblemParameters<Fitness>,
+    buckets: &mut lsh::Buckets,
 ) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
@@ -1804,7 +1805,6 @@ fn evaluate_teams<
                 team.behavior_descriptor = Some(output.1);
             }
         });
-        // todo archive entries and compute novelty stores here
     } else {
         for team in teams.iter_mut() {
             if team.fitness.is_none() {
@@ -1813,6 +1813,16 @@ fn evaluate_teams<
                 team.behavior_descriptor = Some(output.1);
             }
         }
+    }
+
+    // archive teams
+    for team in teams.iter() {
+        lsh::
+    }
+    if EVALUATE_PARALLEL {
+        // compute novelty
+    } else {
+        // compute novelty
     }
 }
 

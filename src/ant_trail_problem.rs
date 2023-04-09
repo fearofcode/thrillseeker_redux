@@ -236,6 +236,7 @@ pub fn ant_trail_parameters() -> ProblemParameters<AntTrailFitness> {
         population_size: 50000,
         keep_by_fitness: 100,
         keep_by_novelty: 1000,
+        select_by_novelty: 25000,
         max_program_size: 64,
         min_initial_program_size: 1,
         max_initial_program_size: 8,

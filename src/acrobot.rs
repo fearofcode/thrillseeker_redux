@@ -273,6 +273,7 @@ pub fn acrobot_runs(
         population_size: 5000,
         keep_by_fitness: 500,
         keep_by_novelty: 500,
+        select_by_novelty: 500,
         max_program_size: 32,
         min_initial_program_size: 1,
         max_initial_program_size: 8,
