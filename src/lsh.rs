@@ -1,9 +1,11 @@
 use std::cmp::Reverse;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 
 use rayon::prelude::*;
+use crate::Team;
 
 const HASH_COUNT: usize = 100;
 const BAND_SIZE: usize = 2;
@@ -63,18 +65,46 @@ pub fn jaccard_similarity(a: &HashSet<u64>, b: &HashSet<u64>) -> f32 {
     (intersection_cardinality as f32) / ((a.len() + b.len() - intersection_cardinality) as f32)
 }
 
-pub fn nearest_neighbors(
+pub fn neighbor_similarities<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
     query: &str,
     n: usize,
     matches: &HashSet<usize>,
-    documents: &[String],
+    archive: &Archive<A, Fitness>,
+) -> Vec<f32> {
+    let query_shingles = string_shingles(query);
+    let mut similar_matches: Vec<f32> = matches
+        .par_iter()
+        .map(|m| {
+            let team = &archive.entries.get(m).unwrap().team;
+            let match_shingles = string_shingles(&team.behavior_descriptor.unwrap());
+            jaccard_similarity(&query_shingles, &match_shingles)
+        })
+        .collect();
+    similar_matches.sort_by(|a, b| b.partial_cmp(&a).unwrap());
+    if similar_matches.len() > n {
+        similar_matches.resize(n, 0.0);
+    }
+    similar_matches
+}
+
+pub fn nearest_neighbors<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    query: &str,
+    n: usize,
+    matches: &HashSet<usize>,
+    archive: &Archive<A, Fitness>,
 ) -> Vec<(usize, f32)> {
     let query_shingles = string_shingles(query);
     let mut similar_matches: Vec<(usize, f32)> = matches
         .par_iter()
         .map(|m| {
-            let document = &documents[*m];
-            let match_shingles = string_shingles(document);
+            let team = &archive.entries.get(m).unwrap().team;
+            let match_shingles = string_shingles(&team.behavior_descriptor.unwrap());
             let similarity = jaccard_similarity(&query_shingles, &match_shingles);
             (*m, similarity)
         })
@@ -98,34 +128,53 @@ pub fn initialize_buckets() -> Buckets {
     buckets
 }
 
-pub struct Document {
-    contents: String,
-    id: usize,
-}
-
-pub fn index_documents(documents: &mut Vec<Document>, buckets: &mut Buckets) {
-    let chunked_min_hashes: Vec<(usize, Vec<(usize, u64)>)> = documents
+pub fn index_teams<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    teams: &Vec<Team<A, Fitness>>, buckets: &mut Buckets) {
+    let chunked_min_hashes: Vec<(usize, Vec<(usize, u64)>)> = teams
         .par_iter()
-        .map(|document| (document.id, chunked_min_hash(&document.contents)))
+        .map(|team| (team.id, chunked_min_hash(&team.behavior_descriptor.unwrap())))
         .collect();
 
-    for (document_id, min_hash) in chunked_min_hashes.iter() {
+    for (team_id, min_hash) in chunked_min_hashes.iter() {
         for (bucket_index, min_hash) in chunked_min_hash.iter() {
             let bucket = &mut buckets[*bucket_index];
             bucket
                 .entry(*min_hash)
                 .or_insert(vec![])
-                .push(*document_id);
+                .push(*team_id);
         }
     }
 }
 
-pub fn search_index(
-    documents: &[String],
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct ArchiveEntry {
+    pub entries_index: usize,
+    pub generation_added: usize,
+}
+
+#[derive(Debug)]
+pub(crate) struct Archive<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> {
+    pub entries: Vec<Team<A, Fitness>>,
+    pub lookup: HashMap<u64, ArchiveEntry>,
+    pub distance_cache: HashMap<(u64, u64), f32>,
+}
+
+pub fn search_index<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+>(
+    archive: &Archive<A, Fitness>,
     buckets: &mut Buckets,
     query: &str,
     n: usize,
-) -> (HashSet<usize>, Vec<(usize, f32)>) {
+) -> Vec<f32> {
     let mut matches: HashSet<usize> = HashSet::new();
     let query_signature = chunked_min_hash(query);
     for (bucket_index, min_hash) in query_signature.iter() {
@@ -135,20 +184,5 @@ pub fn search_index(
         }
     }
 
-    let top_neighbors = nearest_neighbors(query, n, &matches, documents);
-    (matches, top_neighbors)
+    neighbor_similarities(query, n, &matches, archive)
 }
-
-/*
-    let mut buckets = index_documents(&mut documents);
-    let (matches, top_neighbors) = search_index(&documents, &mut buckets, query, 25);
-    for (match_idx, (idx, similarity)) in top_neighbors.iter().enumerate() {
-        println!(
-            "Match {}: {}, similarity {}, index {}",
-            match_idx + 1,
-            documents[*idx],
-            similarity,
-            idx
-        );
-    }
-*/

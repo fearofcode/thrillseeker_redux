@@ -15,6 +15,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::lsh::ArchiveEntry;
 
 fn coin_flip(p: f32, rng: &mut Rng) -> bool {
     rng.f32() < p
@@ -1329,6 +1330,7 @@ pub struct Team<
     pub fitness: Option<Fitness>,
     behavior_descriptor: Option<BehaviorDescriptor>,
     novelty: Option<f32>,
+    lsh_lookup_succeeded: bool,
     id: u64,
     parent1_id: u64,
     parent2_id: u64,
@@ -1575,24 +1577,6 @@ pub fn evaluate_team<
         .collect()
 }
 
-#[derive(Debug, Eq, PartialEq)]
-struct ArchiveEntry<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> {
-    team: Team<A, Fitness>,
-    generation_added: usize,
-}
-
-#[derive(Debug)]
-struct Archive<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-> {
-    entries: HashMap<usize, ArchiveEntry<A, Fitness>>,
-    distance_cache: HashMap<(usize, usize), f32>,
-}
-
 fn tournament_selection_fitness<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
@@ -1794,7 +1778,10 @@ fn evaluate_teams<
     labels: &[A],
     individual_output: IndividualErrorFunction<A, Fitness>,
     params: &ProblemParameters<Fitness>,
+    archive: &mut lsh::Archive<A, Fitness>,
     buckets: &mut lsh::Buckets,
+    generation: usize,
+    rng: &mut Rng,
 ) {
     if EVALUATE_PARALLEL {
         teams.par_iter_mut().for_each(|team| {
@@ -1817,10 +1804,35 @@ fn evaluate_teams<
 
     // archive teams
     for team in teams.iter() {
-        lsh::
+        archive.entries.push(team.clone());
+        let team_archive_index = archive.entries.len() - 1;
+        archive.lookup.insert(team.id, ArchiveEntry { entries_index: team_archive_index, generation_added: generation });
+        lsh::index_teams(teams, buckets);
     }
+
     if EVALUATE_PARALLEL {
-        // compute novelty
+        teams.par_iter_mut().for_each(|team| {
+            let n = 10;
+            let similarities = lsh::search_index(
+                archive,
+                buckets,
+                &team.behavior_descriptor.unwrap(),
+             n);
+            if (similarities.len() >= n) {
+                team.novelty = Some(similarities.sum());
+                // for gauging effectiveness of LSH lookup
+                team.lsh_lookup_succeeded = true;
+            } else {
+                // sample from the archive and get similarities there
+                let archive_size = archive.entries.len();
+                let sample_count = 25;
+                for _ in 0..sample_count {
+                    let archive_index = rng.usize(archive_size);
+                    let team_descriptor = arc
+                }
+                team.lsh_lookup_succeeded = false;
+            }
+        });
     } else {
         // compute novelty
     }
