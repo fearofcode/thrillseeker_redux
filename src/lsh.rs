@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 
 use rayon::prelude::*;
-use crate::Team;
+use crate::{Team, TeamId};
 
 const HASH_COUNT: usize = 100;
 const BAND_SIZE: usize = 2;
@@ -47,7 +47,7 @@ fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
         .collect()
 }
 
-fn string_shingles(document: &str) -> HashSet<u64> {
+pub fn string_shingles(document: &str) -> HashSet<u64> {
     let shingle_count = document.len() - SHINGLE_SIZE;
     let mut shingles = HashSet::new();
     for idx in 0..shingle_count {
@@ -71,15 +71,15 @@ pub fn neighbor_similarities<
 >(
     query: &str,
     n: usize,
-    matches: &HashSet<usize>,
+    matches: &HashSet<TeamId>,
     archive: &Archive<A, Fitness>,
 ) -> Vec<f32> {
     let query_shingles = string_shingles(query);
     let mut similar_matches: Vec<f32> = matches
         .par_iter()
         .map(|m| {
-            let team = &archive.entries.get(m).unwrap().team;
-            let match_shingles = string_shingles(&team.behavior_descriptor.unwrap());
+            let entry = &archive.lookup.get(m).unwrap();
+            let match_shingles = string_shingles(&entry.team.behavior_descriptor);
             jaccard_similarity(&query_shingles, &match_shingles)
         })
         .collect();
@@ -90,33 +90,7 @@ pub fn neighbor_similarities<
     similar_matches
 }
 
-pub fn nearest_neighbors<
-    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
-    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
->(
-    query: &str,
-    n: usize,
-    matches: &HashSet<usize>,
-    archive: &Archive<A, Fitness>,
-) -> Vec<(usize, f32)> {
-    let query_shingles = string_shingles(query);
-    let mut similar_matches: Vec<(usize, f32)> = matches
-        .par_iter()
-        .map(|m| {
-            let team = &archive.entries.get(m).unwrap().team;
-            let match_shingles = string_shingles(&team.behavior_descriptor.unwrap());
-            let similarity = jaccard_similarity(&query_shingles, &match_shingles);
-            (*m, similarity)
-        })
-        .collect();
-    similar_matches.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-    if similar_matches.len() > n {
-        similar_matches.resize(n, (0, 0.0));
-    }
-    similar_matches
-}
-
-pub(crate) type Buckets = Vec<HashMap<u64, Vec<usize>>>;
+pub type Buckets = Vec<HashMap<u64, Vec<usize>>>;
 
 pub fn initialize_buckets() -> Buckets {
     let mut buckets: Vec<HashMap<u64, Vec<usize>>> = vec![];
@@ -133,12 +107,14 @@ pub fn index_teams<
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
     teams: &Vec<Team<A, Fitness>>, buckets: &mut Buckets) {
-    let chunked_min_hashes: Vec<(usize, Vec<(usize, u64)>)> = teams
+    let chunked_min_hashes: Vec<Vec<(usize, u64)>> = teams
         .par_iter()
-        .map(|team| (team.id, chunked_min_hash(&team.behavior_descriptor.unwrap())))
+        .map(|team| chunked_min_hash(&team.behavior_descriptor))
         .collect();
 
-    for (team_id, min_hash) in chunked_min_hashes.iter() {
+    let team_ids: Vec<usize> = teams.iter().map(|team| team.id).collect();
+
+    for (chunked_min_hash, team_id) in chunked_min_hashes.iter().zip(team_ids.iter()).into_iter() {
         for (bucket_index, min_hash) in chunked_min_hash.iter() {
             let bucket = &mut buckets[*bucket_index];
             bucket
@@ -151,19 +127,21 @@ pub fn index_teams<
 
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ArchiveEntry {
-    pub entries_index: usize,
+pub struct ArchiveEntry<
+    A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+    Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
+> {
+    pub team: Team<A, Fitness>,
     pub generation_added: usize,
 }
 
 #[derive(Debug)]
-pub(crate) struct Archive<
+pub struct Archive<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 > {
-    pub entries: Vec<Team<A, Fitness>>,
-    pub lookup: HashMap<u64, ArchiveEntry>,
-    pub distance_cache: HashMap<(u64, u64), f32>,
+    pub lookup: HashMap<TeamId, ArchiveEntry<A, Fitness>>,
+    pub distance_cache: HashMap<(TeamId, TeamId), f32>
 }
 
 pub fn search_index<
@@ -179,8 +157,8 @@ pub fn search_index<
     let query_signature = chunked_min_hash(query);
     for (bucket_index, min_hash) in query_signature.iter() {
         let bucket = &mut buckets[*bucket_index];
-        if bucket.contains_key(min_hash) {
-            matches.extend(&bucket[min_hash]);
+        if let Some(b) = bucket.get(min_hash) {
+            matches.extend(b);
         }
     }
 

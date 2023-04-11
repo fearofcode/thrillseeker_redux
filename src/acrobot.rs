@@ -261,7 +261,7 @@ pub fn acrobot_runs(
     Vec<Team<AcrobotAction, AcrobotFitness>>,
     ProblemParameters<AcrobotFitness>,
 ) {
-    let mut id_counter: u64 = 1;
+    let mut id_counter: usize = 1;
 
     let mut best_teams: Vec<Team<AcrobotAction, AcrobotFitness>> = vec![];
 

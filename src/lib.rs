@@ -6,8 +6,8 @@ mod lsh;
 use fastrand::Rng;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::cmp::{max, min, Ordering};
+use std::collections::HashSet;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
@@ -15,7 +15,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::lsh::ArchiveEntry;
+use crate::lsh::{Archive, ArchiveEntry, Buckets, initialize_buckets, jaccard_similarity};
 
 fn coin_flip(p: f32, rng: &mut Rng) -> bool {
     rng.f32() < p
@@ -435,7 +435,7 @@ struct Program<
     active_instructions: Vec<Instruction>,
     introns: Vec<Instruction>,
     action: A,
-    id: u64,
+    id: usize,
 }
 
 impl<
@@ -1219,7 +1219,7 @@ fn mutate_program<
     program: &mut Program<A>,
     team_actions: &[A],
     rng: &mut Rng,
-    counter: &mut u64,
+    counter: &mut usize,
     params: &ProblemParameters<Fitness>,
     index_to_program_action: fn(usize) -> A,
 ) {
@@ -1321,6 +1321,8 @@ fn mutate_program<
 
 type BehaviorDescriptor = String;
 
+type TeamId = usize;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Team<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
@@ -1328,12 +1330,12 @@ pub struct Team<
 > {
     programs: Vec<Program<A>>,
     pub fitness: Option<Fitness>,
-    behavior_descriptor: Option<BehaviorDescriptor>,
+    behavior_descriptor: BehaviorDescriptor,
     novelty: Option<f32>,
     lsh_lookup_succeeded: bool,
-    id: u64,
-    parent1_id: u64,
-    parent2_id: u64,
+    id: TeamId,
+    parent1_id: TeamId,
+    parent2_id: TeamId,
     version: usize,
 }
 
@@ -1342,6 +1344,49 @@ impl<
         Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Team<A, Fitness>
 {
+    pub(crate) fn compute_novelty(&mut self, archive: &mut Archive<A, Fitness>, buckets: &mut Buckets, rng: &mut Rng) {
+        let n = 10;
+        // returning a vec here
+        let similarities = lsh::search_index(
+            archive,
+            buckets,
+            &self.behavior_descriptor,
+            n);
+        // helpful to return a vector rather than the sum right away to see if we got enough
+        // data to do the calculation
+        if similarities.len() >= n {
+            self.novelty = Some(similarities.iter().sum());
+            // for gauging effectiveness of LSH lookup
+            self.lsh_lookup_succeeded = true;
+        } else {
+            let archive_size = archive.lookup.len();
+            // sample from the archive and get similarities there
+            let sample_count = 25;
+            // TODO this can be cached
+            let team_shingles = lsh::string_shingles(&self.behavior_descriptor);
+            let team_index = self.id;
+            let mut similarity_sum = 0.0;
+            for _ in 0..sample_count {
+                let archive_index = rng.usize(..archive_size);
+                let sorted_ids = (min(team_index, archive_index), max(team_index, archive_index));
+                let similarity = {
+                    if let Some(cached_similarity) = archive.distance_cache.get(&sorted_ids) {
+                        *cached_similarity
+                    } else {
+                        let comparison_descriptor = &archive.lookup.values().nth(archive_index).unwrap().team.behavior_descriptor;
+                        let comparison_shingles = lsh::string_shingles(comparison_descriptor);
+                        let computed_similarity = jaccard_similarity(&team_shingles, &comparison_shingles);
+                        archive.distance_cache.insert(sorted_ids, computed_similarity);
+                        computed_similarity
+                    }
+                };
+                similarity_sum += similarity;
+            }
+            self.novelty = Some(similarity_sum);
+            self.lsh_lookup_succeeded = false;
+        }
+    }
+
     pub fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
         println!("Team ID #{}", self.id);
 
@@ -1445,7 +1490,7 @@ fn initialize_teams<
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
     rng: &mut Rng,
-    id_counter: &mut u64,
+    id_counter: &mut usize,
     params: &ProblemParameters<Fitness>,
     index_to_program_action: fn(usize) -> A,
 ) -> Vec<Team<A, Fitness>> {
@@ -1457,11 +1502,12 @@ fn initialize_teams<
             programs: vec![],
             fitness: None,
             novelty: None,
-            behavior_descriptor: None,
+            behavior_descriptor: String::new(),
             id: 0,
             parent1_id: 0,
             parent2_id: 0,
             version: THRILLSEEKER_VERSION,
+            lsh_lookup_succeeded: false,
         };
         team.programs.reserve(params.max_team_size);
 
@@ -1640,7 +1686,7 @@ fn mutate_team<
     team: &mut Team<A, Fitness>,
     other_team: &mut Team<A, Fitness>,
     rng: &mut Rng,
-    counter: &mut u64,
+    counter: &mut usize,
     params: &ProblemParameters<Fitness>,
     index_to_program_action: fn(usize) -> A,
 ) {
@@ -1722,7 +1768,7 @@ fn team_crossover<
     rng.shuffle(&mut team1.programs);
     rng.shuffle(&mut team2.programs);
 
-    let used_team2_ids: HashSet<u64> = HashSet::new();
+    let used_team2_ids: HashSet<usize> = HashSet::new();
 
     // avoid doing crossover that would result in empty programs
     team1.programs = team1
@@ -1789,7 +1835,7 @@ fn evaluate_teams<
             if team.fitness.is_none() {
                 let output = individual_output(team, fitness_cases, params, labels);
                 team.fitness = Some(output.0);
-                team.behavior_descriptor = Some(output.1);
+                team.behavior_descriptor = output.1;
             }
         });
     } else {
@@ -1797,44 +1843,20 @@ fn evaluate_teams<
             if team.fitness.is_none() {
                 let output = individual_output(team, fitness_cases, params, labels);
                 team.fitness = Some(output.0);
-                team.behavior_descriptor = Some(output.1);
+                team.behavior_descriptor = output.1;
             }
         }
     }
 
     // archive teams
     for team in teams.iter() {
-        archive.entries.push(team.clone());
-        let team_archive_index = archive.entries.len() - 1;
-        archive.lookup.insert(team.id, ArchiveEntry { entries_index: team_archive_index, generation_added: generation });
+        archive.lookup.insert(team.id, ArchiveEntry { team: team.clone(), generation_added: generation });
         lsh::index_teams(teams, buckets);
     }
 
-    if EVALUATE_PARALLEL {
-        teams.par_iter_mut().for_each(|team| {
-            let n = 10;
-            let similarities = lsh::search_index(
-                archive,
-                buckets,
-                &team.behavior_descriptor.unwrap(),
-             n);
-            if (similarities.len() >= n) {
-                team.novelty = Some(similarities.sum());
-                // for gauging effectiveness of LSH lookup
-                team.lsh_lookup_succeeded = true;
-            } else {
-                // sample from the archive and get similarities there
-                let archive_size = archive.entries.len();
-                let sample_count = 25;
-                for _ in 0..sample_count {
-                    let archive_index = rng.usize(archive_size);
-                    let team_descriptor = arc
-                }
-                team.lsh_lookup_succeeded = false;
-            }
-        });
-    } else {
-        // compute novelty
+    // TODO find a way to parallelize this
+    for team in teams.iter_mut() {
+        team.compute_novelty(archive, buckets, rng);
     }
 }
 
@@ -1850,7 +1872,7 @@ struct RunParameters<
     problem_parameters: &'a ProblemParameters<Fitness>,
     individual_output: IndividualErrorFunction<A, Fitness>,
     index_to_program_action: fn(usize) -> A,
-    id_counter: &'a mut u64,
+    id_counter: &'a mut usize,
     dump: bool,
     seed: u64,
 }
@@ -1879,6 +1901,11 @@ fn one_run<
 
     let mut stagnation_count = 0;
 
+    let mut buckets = initialize_buckets();
+    let mut archive = Archive{
+        lookup: Default::default(),
+        distance_cache: Default::default(),
+    };
     for generation in 1..=run_parameters.problem_parameters.generation_count {
         println!("Starting generation {}", generation);
         evaluate_teams(
@@ -1887,6 +1914,10 @@ fn one_run<
             run_parameters.labels,
             run_parameters.individual_output,
             run_parameters.problem_parameters,
+            &mut archive,
+            &mut buckets,
+            generation,
+            &mut run_parameters.rng
         );
 
         teams.sort_by(|team1, team2| {
@@ -1916,7 +1947,12 @@ fn one_run<
 
         let mut new_best_found = false;
 
+        let mut lsh_succeeded_count = 0;
         for team in teams.iter() {
+            if team.lsh_lookup_succeeded {
+                lsh_succeeded_count += 1;
+            }
+
             if best_team.fitness.is_none() || (team.fitness.unwrap() < best_team.fitness.unwrap()) {
                 new_best_found = true;
                 best_team = team.clone();
@@ -1943,6 +1979,8 @@ fn one_run<
             }
         }
 
+        println!("LSH novelty lookup succeeded for {} out of {} teams.", lsh_succeeded_count, teams.len());
+        
         if optimal_team_found {
             break;
         }

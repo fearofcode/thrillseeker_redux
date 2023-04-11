@@ -304,7 +304,7 @@ pub fn ant_trail_runs(
     Vec<Team<AntTrailAction, AntTrailFitness>>,
     ProblemParameters<AntTrailFitness>,
 ) {
-    let mut id_counter: u64 = 1;
+    let mut id_counter: usize = 1;
 
     let mut best_teams: Vec<Team<AntTrailAction, AntTrailFitness>> = vec![];
 
