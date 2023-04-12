@@ -29,7 +29,7 @@ fn main() {
         println!();
     };
 
-    let (food_gathered, steps) = simulate_ant_trail(&team, &params, Some(draw_grid));
+    let (food_gathered, steps, _) = simulate_ant_trail(&team, &params, Some(draw_grid));
 
     println!("Food gathered: {}", food_gathered);
     println!("Steps: {}", steps);

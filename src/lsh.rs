@@ -4,8 +4,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 
-use rayon::prelude::*;
 use crate::{Team, TeamId};
+use rayon::prelude::*;
 
 const HASH_COUNT: usize = 100;
 const BAND_SIZE: usize = 2;
@@ -83,7 +83,7 @@ pub fn neighbor_similarities<
             jaccard_similarity(&query_shingles, &match_shingles)
         })
         .collect();
-    similar_matches.sort_by(|a, b| b.partial_cmp(&a).unwrap());
+    similar_matches.sort_by(|a, b| b.partial_cmp(a).unwrap());
     if similar_matches.len() > n {
         similar_matches.resize(n, 0.0);
     }
@@ -106,7 +106,9 @@ pub fn index_teams<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 >(
-    teams: &Vec<Team<A, Fitness>>, buckets: &mut Buckets) {
+    teams: &Vec<Team<A, Fitness>>,
+    buckets: &mut Buckets,
+) {
     let chunked_min_hashes: Vec<Vec<(usize, u64)>> = teams
         .par_iter()
         .map(|team| chunked_min_hash(&team.behavior_descriptor))
@@ -114,17 +116,13 @@ pub fn index_teams<
 
     let team_ids: Vec<usize> = teams.iter().map(|team| team.id).collect();
 
-    for (chunked_min_hash, team_id) in chunked_min_hashes.iter().zip(team_ids.iter()).into_iter() {
+    for (chunked_min_hash, team_id) in chunked_min_hashes.iter().zip(team_ids.iter()) {
         for (bucket_index, min_hash) in chunked_min_hash.iter() {
             let bucket = &mut buckets[*bucket_index];
-            bucket
-                .entry(*min_hash)
-                .or_insert(vec![])
-                .push(*team_id);
+            bucket.entry(*min_hash).or_insert(vec![]).push(*team_id);
         }
     }
 }
-
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ArchiveEntry<
@@ -141,7 +139,7 @@ pub struct Archive<
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 > {
     pub lookup: HashMap<TeamId, ArchiveEntry<A, Fitness>>,
-    pub distance_cache: HashMap<(TeamId, TeamId), f32>
+    pub distance_cache: HashMap<(TeamId, TeamId), f32>,
 }
 
 pub fn search_index<
