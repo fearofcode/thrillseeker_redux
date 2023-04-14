@@ -9,7 +9,7 @@ use rayon::prelude::*;
 
 const HASH_COUNT: usize = 100;
 const BAND_SIZE: usize = 2;
-const SHINGLE_SIZE: usize = 4;
+const SHINGLE_SIZE: usize = 6;
 
 fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
     // single hash function. for justification, see https://robertheaton.com/2014/05/02/jaccard-similarity-and-minhash-for-winners/
@@ -78,7 +78,8 @@ pub fn neighbor_similarities<
     let mut similar_matches: Vec<f32> = matches
         .par_iter()
         .map(|m| {
-            let entry = &archive.lookup.get(m).unwrap();
+            let entry_index = archive.id_to_entries_index.get(m).unwrap();
+            let entry = &archive.entries[*entry_index];
             let match_shingles = string_shingles(&entry.team.behavior_descriptor);
             jaccard_similarity(&query_shingles, &match_shingles)
         })
@@ -138,7 +139,8 @@ pub struct Archive<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
 > {
-    pub lookup: HashMap<TeamId, ArchiveEntry<A, Fitness>>,
+    pub entries: Vec<ArchiveEntry<A, Fitness>>,
+    pub id_to_entries_index: HashMap<TeamId, usize>,
     pub distance_cache: HashMap<(TeamId, TeamId), f32>,
 }
 

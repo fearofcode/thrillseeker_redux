@@ -1356,7 +1356,7 @@ impl<
             // for gauging effectiveness of LSH lookup
             self.lsh_lookup_succeeded = true;
         } else {
-            let archive_size = archive.lookup.len();
+            let archive_size = archive.entries.len();
             // sample from the archive and get similarities there
             let sample_count = 25;
             // TODO this can be cached
@@ -1374,10 +1374,7 @@ impl<
                         *cached_similarity
                     } else {
                         let comparison_descriptor = &archive
-                            .lookup
-                            .values()
-                            .nth(archive_index)
-                            .unwrap()
+                            .entries[archive_index]
                             .team
                             .behavior_descriptor;
                         let comparison_shingles = lsh::string_shingles(comparison_descriptor);
@@ -1640,23 +1637,42 @@ fn tournament_selection_fitness<
     rng: &mut Rng,
     params: &ProblemParameters<Fitness>,
 ) -> usize {
-    (0..params.tournament_size)
-        .map(|_| rng.usize(..teams.len()))
+    let selected_indexes: Vec<usize> = (0..params.tournament_size)
+        .map(|_| rng.usize(..teams.len())).collect();
+
+    let original = selected_indexes.iter()
         .max_by(|index1, index2| {
-            match teams[*index1]
+            match teams[**index1]
                 .fitness
                 .unwrap()
-                .partial_cmp(&teams[*index2].fitness.unwrap())
+                .partial_cmp(&teams[**index2].fitness.unwrap())
                 .unwrap()
             {
-                Ordering::Equal => teams[*index1]
+                Ordering::Equal => teams[**index1]
                     .active_instruction_count()
-                    .partial_cmp(&teams[*index2].active_instruction_count())
+                    .partial_cmp(&teams[**index2].active_instruction_count())
                     .unwrap(),
                 other => other,
             }
         })
-        .unwrap()
+        .unwrap();
+    let correct = selected_indexes.iter()
+        .min_by(|index1, index2| {
+            match teams[**index1]
+                .fitness
+                .unwrap()
+                .partial_cmp(&teams[**index2].fitness.unwrap())
+                .unwrap()
+            {
+                Ordering::Equal => teams[**index1]
+                    .active_instruction_count()
+                    .partial_cmp(&teams[**index2].active_instruction_count())
+                    .unwrap(),
+                other => other,
+            }
+        })
+        .unwrap();
+    *correct
 }
 
 fn tournament_selection_novelty<
@@ -1860,16 +1876,19 @@ fn evaluate_teams<
 
     // archive teams
     for team in teams.iter() {
-        archive.lookup.insert(
+        archive.entries.push(ArchiveEntry {
+            team: team.clone(),
+            generation_added: generation,
+        });
+        let last_index = archive.entries.len()-1;
+        archive.id_to_entries_index.insert(
             team.id,
-            ArchiveEntry {
-                team: team.clone(),
-                generation_added: generation,
-            },
+            last_index,
         );
-        lsh::index_teams(teams, buckets);
     }
+    lsh::index_teams(teams, buckets);
 
+    println!("about to compute novelty");
     // TODO find a way to parallelize this
     for team in teams.iter_mut() {
         team.compute_novelty(archive, buckets, run_parameters.rng);
@@ -1919,9 +1938,14 @@ fn one_run<
 
     let mut buckets = initialize_buckets();
     let mut archive = Archive {
-        lookup: Default::default(),
+        entries: vec![],
+        id_to_entries_index: Default::default(),
         distance_cache: Default::default(),
     };
+    let max_archive_size = run_parameters.problem_parameters.population_size*run_parameters.problem_parameters.generation_count;
+    archive.entries.reserve(max_archive_size);
+    archive.id_to_entries_index.reserve(max_archive_size);
+
     for generation in 1..=run_parameters.problem_parameters.generation_count {
         println!("Starting generation {}", generation);
         evaluate_teams(
@@ -2198,6 +2222,7 @@ fn one_run<
             }
         }
         teams = next_generation;
+        assert_eq!(teams.len(), run_parameters.problem_parameters.population_size);
     }
 
     println!("Done with run # {}", run_parameters.run);
