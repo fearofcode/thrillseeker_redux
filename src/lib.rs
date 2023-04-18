@@ -3,11 +3,11 @@ pub mod ant_trail;
 pub mod ant_trail_problem;
 mod lsh;
 
-use crate::lsh::{initialize_buckets, jaccard_similarity, Archive, ArchiveEntry, Buckets};
+use crate::lsh::{initialize_buckets, Archive, ArchiveEntry, Buckets};
 use fastrand::Rng;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::cmp::{max, min, Ordering};
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -15,7 +15,7 @@ use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 fn coin_flip(p: f32, rng: &mut Rng) -> bool {
     rng.f32() < p
@@ -1328,7 +1328,6 @@ pub struct Team<
     pub fitness: Option<Fitness>,
     behavior_descriptor: BehaviorDescriptor,
     novelty: Option<f32>,
-    lsh_lookup_succeeded: bool,
     id: TeamId,
     parent1_id: TeamId,
     parent2_id: TeamId,
@@ -1340,57 +1339,12 @@ impl<
         Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     > Team<A, Fitness>
 {
-    pub(crate) fn compute_novelty(
-        &mut self,
-        archive: &mut Archive<A, Fitness>,
-        buckets: &mut Buckets,
-        rng: &mut Rng,
-    ) {
-        let n = 10;
-        // returning a vec here
-        let similarities = lsh::search_index(archive, buckets, &self.behavior_descriptor, n);
-        // helpful to return a vector rather than the sum right away to see if we got enough
-        // data to do the calculation
-        if similarities.len() >= n {
-            self.novelty = Some(similarities.iter().sum());
-            // for gauging effectiveness of LSH lookup
-            self.lsh_lookup_succeeded = true;
-        } else {
-            let archive_size = archive.entries.len();
-            // sample from the archive and get similarities there
-            let sample_count = 25;
-            // TODO this can be cached
-            let team_shingles = lsh::string_shingles(&self.behavior_descriptor);
-            let team_index = self.id;
-            let mut similarity_sum = 0.0;
-            for _ in 0..sample_count {
-                let archive_index = rng.usize(..archive_size);
-                let sorted_ids = (
-                    min(team_index, archive_index),
-                    max(team_index, archive_index),
-                );
-                let similarity = {
-                    if let Some(cached_similarity) = archive.distance_cache.get(&sorted_ids) {
-                        *cached_similarity
-                    } else {
-                        let comparison_descriptor = &archive
-                            .entries[archive_index]
-                            .team
-                            .behavior_descriptor;
-                        let comparison_shingles = lsh::string_shingles(comparison_descriptor);
-                        let computed_similarity =
-                            jaccard_similarity(&team_shingles, &comparison_shingles);
-                        archive
-                            .distance_cache
-                            .insert(sorted_ids, computed_similarity);
-                        computed_similarity
-                    }
-                };
-                similarity_sum += similarity;
-            }
-            self.novelty = Some(similarity_sum);
-            self.lsh_lookup_succeeded = false;
-        }
+    pub(crate) fn compute_novelty(&mut self, archive: &Archive<A, Fitness>, buckets: &Buckets) {
+        // we just need a rough proxy of how similar the team is to other entries in the archive
+        // we don't actually need to compute exact similarity
+        let match_count = lsh::count_matches(buckets, &self.behavior_descriptor);
+        let novelty_fraction = match_count as f32;
+        self.novelty = Some(novelty_fraction);
     }
 
     pub fn print_readable_features(&self, feature_names: &[&'static str], constants: &[&str]) {
@@ -1469,6 +1423,7 @@ impl<
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "Team ID #{}", self.id).unwrap();
+        write!(f, "Behavior descriptor:\n\t{}", self.behavior_descriptor).unwrap();
 
         if self.parent1_id != 0 {
             writeln!(f, "Team Parent #1: {}", self.parent1_id).unwrap();
@@ -1513,7 +1468,6 @@ fn initialize_teams<
             parent1_id: 0,
             parent2_id: 0,
             version: THRILLSEEKER_VERSION,
-            lsh_lookup_succeeded: false,
         };
         team.programs.reserve(params.max_team_size);
 
@@ -1637,42 +1591,33 @@ fn tournament_selection_fitness<
     rng: &mut Rng,
     params: &ProblemParameters<Fitness>,
 ) -> usize {
-    let selected_indexes: Vec<usize> = (0..params.tournament_size)
-        .map(|_| rng.usize(..teams.len())).collect();
-
-    let original = selected_indexes.iter()
+    (0..params.tournament_size)
+        .map(|_| rng.usize(..teams.len()))
         .max_by(|index1, index2| {
-            match teams[**index1]
+            match teams[*index1]
                 .fitness
                 .unwrap()
-                .partial_cmp(&teams[**index2].fitness.unwrap())
+                .partial_cmp(&teams[*index2].fitness.unwrap())
                 .unwrap()
             {
-                Ordering::Equal => teams[**index1]
-                    .active_instruction_count()
-                    .partial_cmp(&teams[**index2].active_instruction_count())
-                    .unwrap(),
+                Ordering::Equal => {
+                    match teams[*index1]
+                        .novelty
+                        .unwrap()
+                        .partial_cmp(&teams[*index2].novelty.unwrap())
+                        .unwrap()
+                    {
+                        Ordering::Equal => teams[*index1]
+                            .active_instruction_count()
+                            .partial_cmp(&teams[*index2].active_instruction_count())
+                            .unwrap(),
+                        other => other,
+                    }
+                }
                 other => other,
             }
         })
-        .unwrap();
-    let correct = selected_indexes.iter()
-        .min_by(|index1, index2| {
-            match teams[**index1]
-                .fitness
-                .unwrap()
-                .partial_cmp(&teams[**index2].fitness.unwrap())
-                .unwrap()
-            {
-                Ordering::Equal => teams[**index1]
-                    .active_instruction_count()
-                    .partial_cmp(&teams[**index2].active_instruction_count())
-                    .unwrap(),
-                other => other,
-            }
-        })
-        .unwrap();
-    *correct
+        .unwrap()
 }
 
 fn tournament_selection_novelty<
@@ -1692,10 +1637,20 @@ fn tournament_selection_novelty<
                 .partial_cmp(&teams[*index2].novelty.unwrap())
                 .unwrap()
             {
-                Ordering::Equal => teams[*index1]
-                    .active_instruction_count()
-                    .partial_cmp(&teams[*index2].active_instruction_count())
-                    .unwrap(),
+                Ordering::Equal => {
+                    match teams[*index1]
+                        .fitness
+                        .unwrap()
+                        .partial_cmp(&teams[*index2].fitness.unwrap())
+                        .unwrap()
+                    {
+                        Ordering::Equal => teams[*index1]
+                            .active_instruction_count()
+                            .partial_cmp(&teams[*index2].active_instruction_count())
+                            .unwrap(),
+                        other => other,
+                    }
+                }
                 other => other,
             }
         })
@@ -1880,19 +1835,28 @@ fn evaluate_teams<
             team: team.clone(),
             generation_added: generation,
         });
-        let last_index = archive.entries.len()-1;
-        archive.id_to_entries_index.insert(
-            team.id,
-            last_index,
-        );
+        let last_index = archive.entries.len() - 1;
+        archive.id_to_entries_index.insert(team.id, last_index);
     }
     lsh::index_teams(teams, buckets);
 
-    println!("about to compute novelty");
-    // TODO find a way to parallelize this
-    for team in teams.iter_mut() {
-        team.compute_novelty(archive, buckets, run_parameters.rng);
+    println!("About to compute novelty");
+    let start = Instant::now();
+    if EVALUATE_PARALLEL {
+        teams.par_iter_mut().for_each(|team| {
+            if team.novelty.is_none() {
+                team.compute_novelty(archive, buckets);
+            }
+        });
+    } else {
+        for team in teams.iter_mut() {
+            if team.novelty.is_none() {
+                team.compute_novelty(archive, buckets);
+            }
+        }
     }
+    let elapsed = start.elapsed();
+    println!("Computing novelty took {:?}", elapsed);
 }
 
 struct RunParameters<
@@ -1942,7 +1906,8 @@ fn one_run<
         id_to_entries_index: Default::default(),
         distance_cache: Default::default(),
     };
-    let max_archive_size = run_parameters.problem_parameters.population_size*run_parameters.problem_parameters.generation_count;
+    let max_archive_size = run_parameters.problem_parameters.population_size
+        * run_parameters.problem_parameters.generation_count;
     archive.entries.reserve(max_archive_size);
     archive.id_to_entries_index.reserve(max_archive_size);
 
@@ -1963,10 +1928,20 @@ fn one_run<
                 .partial_cmp(&team2.fitness.unwrap())
                 .unwrap()
             {
-                Ordering::Equal => team1
-                    .active_instruction_count()
-                    .partial_cmp(&team2.active_instruction_count())
-                    .unwrap(),
+                Ordering::Equal => {
+                    match team1
+                        .novelty
+                        .unwrap()
+                        .partial_cmp(&team2.novelty.unwrap())
+                        .unwrap()
+                    {
+                        Ordering::Equal => team1
+                            .active_instruction_count()
+                            .partial_cmp(&team2.active_instruction_count())
+                            .unwrap(),
+                        other => other,
+                    }
+                }
                 other => other,
             }
         });
@@ -1978,25 +1953,23 @@ fn one_run<
 
             for team in teams.iter() {
                 write!(file, "Fitness {}:\n{}", team.fitness.unwrap(), team).unwrap();
+                write!(file, "Behavior descriptor:\n\t{}", team.behavior_descriptor).unwrap();
+
             }
         }
 
         let mut new_best_found = false;
 
-        let mut lsh_succeeded_count = 0;
         for team in teams.iter() {
-            if team.lsh_lookup_succeeded {
-                lsh_succeeded_count += 1;
-            }
-
             if best_team.fitness.is_none() || (team.fitness.unwrap() < best_team.fitness.unwrap()) {
                 new_best_found = true;
                 best_team = team.clone();
                 println!(
-                    "New best found in run #{}, generation {}, with fitness {} and active instruction count {}:",
+                    "New best found in run #{}, generation {}, with fitness {}, novelty {}, active instruction count {}:",
                     run_parameters.run,
                     generation,
                     team.fitness.unwrap(),
+                    team.novelty.unwrap(),
                     team.active_instruction_count()
                 );
                 println!("{}", team);
@@ -2014,12 +1987,6 @@ fn one_run<
                 break;
             }
         }
-
-        println!(
-            "LSH novelty lookup succeeded for {} out of {} teams.",
-            lsh_succeeded_count,
-            teams.len()
-        );
 
         if optimal_team_found {
             break;
@@ -2048,6 +2015,7 @@ fn one_run<
 
         // TODO calculate and display min/max/median fitness
 
+        // keep the keep_by_fitness_amount automatically for next generation
         let mut next_generation = teams.clone();
         next_generation.truncate(run_parameters.problem_parameters.keep_by_fitness);
 
@@ -2078,13 +2046,15 @@ fn one_run<
             }
         });
 
-        teams.truncate(run_parameters.problem_parameters.keep_by_novelty);
-        next_generation.append(&mut teams);
+        // simple way of copying over top novelty teams because Rust slicing is stupid
+        let mut teams_copy = teams.clone();
+        teams_copy.truncate(run_parameters.problem_parameters.keep_by_novelty);
+        next_generation.append(&mut teams_copy);
 
         assert!(run_parameters.problem_parameters.population_size >= next_generation.len());
         let population_to_fill =
             run_parameters.problem_parameters.population_size - next_generation.len();
-        assert!(population_to_fill <= run_parameters.problem_parameters.select_by_novelty);
+        assert!(run_parameters.problem_parameters.select_by_novelty <= population_to_fill);
         let population_to_fill_by_fitness =
             population_to_fill - run_parameters.problem_parameters.select_by_novelty;
         let population_to_fill_by_novelty = run_parameters.problem_parameters.select_by_novelty;
@@ -2148,7 +2118,6 @@ fn one_run<
                     parent1.parent2_id = parent2_id;
                     parent1.fitness = None;
                     parent1.novelty = None;
-                    parent1.lsh_lookup_succeeded = false;
                     // only add new individuals
                     next_generation.push(parent1);
                     break;
@@ -2214,7 +2183,6 @@ fn one_run<
                     parent1.parent2_id = parent2_id;
                     parent1.fitness = None;
                     parent1.novelty = None;
-                    parent1.lsh_lookup_succeeded = false;
                     // only add new individuals
                     next_generation.push(parent1);
                     break;
@@ -2222,7 +2190,10 @@ fn one_run<
             }
         }
         teams = next_generation;
-        assert_eq!(teams.len(), run_parameters.problem_parameters.population_size);
+        assert_eq!(
+            teams.len(),
+            run_parameters.problem_parameters.population_size
+        );
     }
 
     println!("Done with run # {}", run_parameters.run);

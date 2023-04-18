@@ -8,8 +8,8 @@ use crate::{Team, TeamId};
 use rayon::prelude::*;
 
 const HASH_COUNT: usize = 100;
-const BAND_SIZE: usize = 2;
-const SHINGLE_SIZE: usize = 6;
+const BAND_SIZE: usize = 4;
+const SHINGLE_SIZE: usize = 5;
 
 fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
     // single hash function. for justification, see https://robertheaton.com/2014/05/02/jaccard-similarity-and-minhash-for-winners/
@@ -144,6 +144,19 @@ pub struct Archive<
     pub distance_cache: HashMap<(TeamId, TeamId), f32>,
 }
 
+// maybe just use match counts as a fast approximation?
+pub fn count_matches(buckets: &Buckets, query: &str) -> usize {
+    let mut match_count = 0;
+    let query_signature = chunked_min_hash(query);
+    for (bucket_index, min_hash) in query_signature.iter() {
+        let bucket = &buckets[*bucket_index];
+        if let Some(b) = bucket.get(min_hash) {
+            match_count += b.len();
+        }
+    }
+    match_count
+}
+
 pub fn search_index<
     A: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
     Fitness: Debug + Ord + PartialOrd + Eq + PartialEq + Hash + Copy + Clone + Display + Send + Sync,
@@ -151,14 +164,20 @@ pub fn search_index<
     archive: &Archive<A, Fitness>,
     buckets: &mut Buckets,
     query: &str,
+    team_id: TeamId,
     n: usize,
 ) -> Vec<f32> {
+    let max_matches = 50;
     let mut matches: HashSet<usize> = HashSet::new();
     let query_signature = chunked_min_hash(query);
     for (bucket_index, min_hash) in query_signature.iter() {
         let bucket = &mut buckets[*bucket_index];
         if let Some(b) = bucket.get(min_hash) {
-            matches.extend(b);
+            matches.extend(b.iter().filter(|x| **x != team_id));
+        }
+        // only need an approximation
+        if matches.len() > max_matches {
+            break;
         }
     }
 

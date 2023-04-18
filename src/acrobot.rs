@@ -150,7 +150,7 @@ fn runge_kutta(y0: [f32; 5], t: [f32; 2]) -> [[f32; 5]; 2] {
     y_out
 }
 
-#[derive(Hash, Eq, PartialEq, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug, Copy, Clone)]
 pub struct AcrobotFitness {
     pub steps: usize,
 }
@@ -187,7 +187,7 @@ pub fn acrobot_individual_output(
 
     let episode_limit = 500;
 
-    let mut behavior = vec![];
+    // let mut behavior = vec![];
 
     loop {
         if state.is_empty() {
@@ -209,11 +209,11 @@ pub fn acrobot_individual_output(
             // the order of fitness cases in the descriptor will vary. however, due to using
             // Jaccard similarity, the relative order of these should not match as long as the k-mers are there
 
-            behavior.push(match output {
-                AcrobotAction::NegativeTorque => "-",
-                AcrobotAction::DoNothing => "N",
-                AcrobotAction::PositiveTorque => "+",
-            });
+            // behavior.push(match output {
+            //     AcrobotAction::NegativeTorque => "-",
+            //     AcrobotAction::DoNothing => "N",
+            //     AcrobotAction::PositiveTorque => "+",
+            // });
 
             let augmented_state = [
                 current_state[0],
@@ -249,7 +249,7 @@ pub fn acrobot_individual_output(
             .collect();
     }
 
-    let behavior_string = behavior.join("");
+    let behavior_string = format!("{:05}", total_steps);
     (AcrobotFitness { steps: total_steps }, behavior_string)
 }
 
@@ -271,9 +271,9 @@ pub fn acrobot_runs(
         input_count: 4,
         register_count: 4,
         population_size: 5000,
-        keep_by_fitness: 500,
-        keep_by_novelty: 500,
-        select_by_novelty: 500,
+        keep_by_fitness: 100,
+        keep_by_novelty: 100,
+        select_by_novelty: 100,
         max_program_size: 32,
         min_initial_program_size: 1,
         max_initial_program_size: 8,

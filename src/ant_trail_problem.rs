@@ -1,6 +1,4 @@
-use crate::ant_trail::{
-    Direction, Grid, WorldPosition, LOS_ALTOS_PERFECT_SCORE, MAXIMUM_MOVEMENTS,
-};
+use crate::ant_trail::{Direction, Grid, WorldPosition, LOS_ALTOS_PERFECT_SCORE, MAXIMUM_MOVEMENTS, LOS_ALTOS_MINIMAL_MOVES};
 use crate::{BehaviorDescriptor, Function, ProblemParameters, RunParameters, Team};
 use fastrand::Rng;
 use serde::{Deserialize, Serialize};
@@ -14,10 +12,10 @@ pub enum AntTrailAction {
     Down,
     Left,
     Right,
-    // UpRight,
-    // DownRight,
-    // UpLeft,
-    // DownLeft,
+    UpRight,
+    DownRight,
+    UpLeft,
+    DownLeft,
 }
 
 pub fn index_to_ant_trail_action(index: usize) -> AntTrailAction {
@@ -26,10 +24,10 @@ pub fn index_to_ant_trail_action(index: usize) -> AntTrailAction {
         1 => AntTrailAction::Down,
         2 => AntTrailAction::Left,
         3 => AntTrailAction::Right,
-        // 4 => AntTrailAction::UpRight,
-        // 5 => AntTrailAction::DownRight,
-        // 6 => AntTrailAction::UpLeft,
-        // 7 => AntTrailAction::DownLeft,
+        4 => AntTrailAction::UpRight,
+        5 => AntTrailAction::DownRight,
+        6 => AntTrailAction::UpLeft,
+        7 => AntTrailAction::DownLeft,
         _ => panic!(),
     }
 }
@@ -41,10 +39,10 @@ impl fmt::Display for AntTrailAction {
             AntTrailAction::Down => write!(f, "Down"),
             AntTrailAction::Left => write!(f, "Left"),
             AntTrailAction::Right => write!(f, "Right"),
-            // AntTrailAction::UpRight => write!(f, "UpRight"),
-            // AntTrailAction::DownRight => write!(f, "DownRight"),
-            // AntTrailAction::UpLeft => write!(f, "UpLeft"),
-            // AntTrailAction::DownLeft => write!(f, "DownLeft"),
+            AntTrailAction::UpRight => write!(f, "UpRight"),
+            AntTrailAction::DownRight => write!(f, "DownRight"),
+            AntTrailAction::UpLeft => write!(f, "UpLeft"),
+            AntTrailAction::DownLeft => write!(f, "DownLeft"),
         }
     }
 }
@@ -117,7 +115,9 @@ pub fn simulate_ant_trail(
         grid.remove_food_at_position(pos);
     }
 
-    while movement_count < MAXIMUM_MOVEMENTS {
+    let max_stall = 500;
+    let mut stall = 0;
+    while movement_count < MAXIMUM_MOVEMENTS && stall < max_stall {
         let mut state: Vec<f32> = vec![
             if grid.is_food_in_direction(pos, Direction::Up) {
                 1.0
@@ -165,24 +165,8 @@ pub fn simulate_ant_trail(
         }
         let outputs = crate::evaluate_team(team, &[state], params);
         let output = outputs[0];
-        moves.push(match output {
-            AntTrailAction::Up => "U",
-            AntTrailAction::Down => "D",
-            AntTrailAction::Left => "L",
-            AntTrailAction::Right => "R",
-            // AntTrailAction::UpRight => {
-            //     pos.facing = Direction::UpRight;
-            // }
-            // AntTrailAction::DownRight => {
-            //     pos.facing = Direction::DownRight;
-            // }
-            // AntTrailAction::UpLeft => {
-            //     pos.facing = Direction::UpLeft;
-            // }
-            // AntTrailAction::DownLeft => {
-            //     pos.facing = Direction::DownLeft;
-            // }
-        });
+        let pos_str = format!("{:02}{:02}", pos.x, pos.y);
+        moves.push(pos_str);
 
         match output {
             AntTrailAction::Up => {
@@ -196,28 +180,31 @@ pub fn simulate_ant_trail(
             }
             AntTrailAction::Right => {
                 pos.facing = Direction::Right;
-            } // AntTrailAction::UpRight => {
-              //     pos.facing = Direction::UpRight;
-              // }
-              // AntTrailAction::DownRight => {
-              //     pos.facing = Direction::DownRight;
-              // }
-              // AntTrailAction::UpLeft => {
-              //     pos.facing = Direction::UpLeft;
-              // }
-              // AntTrailAction::DownLeft => {
-              //     pos.facing = Direction::DownLeft;
-              // }
+            }
+            AntTrailAction::UpRight => {
+                  pos.facing = Direction::UpRight;
+              }
+              AntTrailAction::DownRight => {
+                  pos.facing = Direction::DownRight;
+              }
+              AntTrailAction::UpLeft => {
+                  pos.facing = Direction::UpLeft;
+              }
+              AntTrailAction::DownLeft => {
+                  pos.facing = Direction::DownLeft;
+              }
         }
 
         pos.one_move();
+        stall += 1;
 
         if grid.food_at_position(pos) {
             food_gathered += 1;
-            if food_gathered >= LOS_ALTOS_PERFECT_SCORE {
+            if food_gathered >= LOS_ALTOS_PERFECT_SCORE && movement_count <= LOS_ALTOS_MINIMAL_MOVES {
                 return (food_gathered, movement_count, moves.join(""));
             }
             grid.remove_food_at_position(pos);
+            stall = 0;
         }
 
         if let Some(cb) = callback {
@@ -232,53 +219,52 @@ pub fn simulate_ant_trail(
 pub fn ant_trail_parameters() -> ProblemParameters<AntTrailFitness> {
     ProblemParameters {
         input_count: 8,
-        register_count: 4,
-        population_size: 500,
+        register_count: 6,
+        population_size: 5000,
         keep_by_fitness: 100,
-        keep_by_novelty: 100,
-        select_by_novelty: 150,
-        max_program_size: 64,
+        keep_by_novelty: 250,
+        select_by_novelty: (5000-(250+100))/2,
+        max_program_size: 128,
         min_initial_program_size: 1,
         max_initial_program_size: 8,
-        // Up, Down, Left, Right
-        action_count: 4,
-        max_initial_team_size: 8,
-        max_team_size: 32,
+        action_count: 8,
+        max_initial_team_size: 32,
+        max_team_size: 64,
         tournament_size: 4,
         generation_count: 1000,
-        generation_stagnation_limit: 25,
+        generation_stagnation_limit: 20,
         run_count: 1,
-        p_delete_instruction: 0.7,
-        p_add_instruction: 0.7,
-        p_swap_instructions: 0.7,
-        p_change_destination: 0.7,
-        p_change_function: 0.7,
-        p_change_input: 0.7,
-        p_flip_input: 0.7,
-        p_change_action: 0.7,
-        p_delete_program: 0.7,
-        p_add_program: 0.7,
+        p_delete_instruction: 0.4,
+        p_add_instruction: 0.4,
+        p_swap_instructions: 0.4,
+        p_change_destination: 0.4,
+        p_change_function: 0.4,
+        p_change_input: 0.4,
+        p_flip_input: 0.4,
+        p_change_action: 0.4,
+        p_delete_program: 0.4,
+        p_add_program: 0.4,
         fitness_threshold: AntTrailFitness {
             food_remaining: 0,
             steps_taken: 300,
         },
         legal_functions: vec![
-            // Function::Relu,
-            // Function::Plus,
-            // Function::Minus,
-            // Function::Times,
-            // Function::Divide,
-            // Function::Square,
-            // Function::Sin,
-            // Function::Log,
+            Function::Relu,
+            Function::Plus,
+            Function::Minus,
+            Function::Times,
+            Function::Divide,
+            Function::Square,
+            Function::Sin,
+            Function::Log,
             Function::And,
             Function::Or,
             Function::Not,
             Function::Xor,
-            // Function::Min,
-            // Function::Max,
-            // Function::Greater,
-            // Function::Less,
+            Function::Min,
+            Function::Max,
+            Function::Greater,
+            Function::Less,
             Function::IfThenElse,
             // Function::Copy,
         ],

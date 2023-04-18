@@ -69,9 +69,43 @@ static LOS_ALTOS_ANT_TRAIL: &str = "###
 
 // number of #'s above. we can terminate if this score is achieved
 pub const LOS_ALTOS_PERFECT_SCORE: usize = 157;
+pub const LOS_ALTOS_MINIMAL_MOVES: usize = 300;
 
-// koza gives 3000 but this seems lousy
-pub const MAXIMUM_MOVEMENTS: usize = 1500;
+static SANTAFE_GRID: &str = " ###
+   #
+   #                    .###..
+   #                    #    #
+   #                    #    #
+   ####.#####       .##..    .
+            #       .        #
+            #       #        .
+            #       #        .
+            #       #        #
+            .       #        .
+            #       .        .
+            #       .        #
+            #       #        .
+            #       #  ...###.
+            .   .#...  #
+            .   .      .
+            #   .      .
+            #   #      .#...
+            #   #          #
+            #   #          .
+            #   #          .
+            #   .      ...#.
+            #   .      #
+ ..##..#####.   #
+ #              #
+ #              #
+ #     .#######..
+ #     #
+ .     #
+ .####..";
+pub const SANTA_FE_PERFECT_SCORE: usize = 89;
+pub const SANTA_FE_MINIMAL_MOVES: usize = 300;
+
+pub const MAXIMUM_MOVEMENTS: usize = 900;
 
 // assume every grid is this size
 pub const GRID_SIZE: i8 = 66;
@@ -102,6 +136,10 @@ impl Grid {
 
     pub fn los_altos_trail() -> Grid {
         Grid::from_trail_string(LOS_ALTOS_ANT_TRAIL)
+    }
+
+    pub fn santa_fe_trail() -> Grid {
+        Grid::from_trail_string(SANTAFE_GRID)
     }
 
     pub fn draw(&self) {
@@ -165,8 +203,8 @@ pub enum Direction {
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub struct WorldPosition {
     // makes implementing movement easy
-    x: i8,
-    y: i8,
+    pub x: i8,
+    pub y: i8,
     pub facing: Direction,
 }
 

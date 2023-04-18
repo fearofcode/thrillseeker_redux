@@ -7,6 +7,7 @@ use std::hash::Hash;
 use std::io::prelude::*;
 use thrillseeker_lib::ant_trail_problem::ant_trail_runs;
 use thrillseeker_lib::{get_seed_value, ProblemParameters, Team};
+use thrillseeker_lib::acrobot::acrobot_runs;
 
 fn setup() -> (u64, bool, Rng) {
     let matches = App::new("thrillseeker")
@@ -61,7 +62,7 @@ fn print_best_teams<
 fn main() {
     let (seed, dump, mut rng) = setup();
 
-    let (best_teams, params) = ant_trail_runs(seed, dump, &mut rng);
+    let (best_teams, params) = acrobot_runs(seed, dump, &mut rng);
     print_best_teams(&best_teams, &params);
 
     // we can always run this since it's not much data
