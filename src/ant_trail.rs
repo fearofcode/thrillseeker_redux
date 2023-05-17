@@ -105,7 +105,7 @@ static SANTAFE_GRID: &str = " ###
 pub const SANTA_FE_PERFECT_SCORE: usize = 89;
 pub const SANTA_FE_MINIMAL_MOVES: usize = 300;
 
-pub const MAXIMUM_MOVEMENTS: usize = 900;
+pub const MAXIMUM_MOVEMENTS: usize = 300;
 
 // assume every grid is this size
 pub const GRID_SIZE: i8 = 66;

@@ -9,18 +9,20 @@ use rayon::prelude::*;
 
 const HASH_COUNT: usize = 100;
 const BAND_SIZE: usize = 4;
-const SHINGLE_SIZE: usize = 5;
+const SHINGLE_SIZE: usize = 4;
 
 fn chunked_min_hash(document: &str) -> Vec<(usize, u64)> {
     // single hash function. for justification, see https://robertheaton.com/2014/05/02/jaccard-similarity-and-minhash-for-winners/
     // and http://web.eecs.utk.edu/~jplank/plank/classes/cs494/494/notes/Min-Hash/index.html
-    let shingle_count = document.len() - SHINGLE_SIZE + 1;
+    let shingle_count = document.len()/SHINGLE_SIZE;
 
     let mut heap = BinaryHeap::with_capacity(shingle_count);
 
     let mut hashes = vec![];
     for idx in 0..shingle_count {
-        let shingle = &document[idx..idx + SHINGLE_SIZE];
+        let start_idx = idx*SHINGLE_SIZE;
+        let end_idx = start_idx+SHINGLE_SIZE-1;
+        let shingle = &document[start_idx..end_idx];
         let mut hasher = DefaultHasher::new();
         shingle.hash(&mut hasher);
         let shingle_hash = hasher.finish();
